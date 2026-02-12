@@ -1,0 +1,11 @@
+langchain
+langchain-community
+langchain-core
+langchain-openai
+langchain-anthropic
+pypdf
+faiss-cpu
+python-dotenv
+tiktoken
+setuptools
+litellm
