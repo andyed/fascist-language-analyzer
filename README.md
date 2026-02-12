@@ -92,20 +92,19 @@ Our analysis of *Project 2025* reveals a rhetorical structure dominated by **Sel
 
 ### Trait Frequency
 ```text
-Selective Populism                   | ████████████████████████████████████████ (101)
-Obsession with a Plot                | ████████████████████████████████████ (93)
-Machismo and Weaponry                | ██████████████████████████ (67)
-Disagreement is Treason              | ████████████████████ (53)
-Appeal to Social Frustration         | ████████████████ (41)
-Fear of Difference                   | ███████████████ (39)
-Ur-Fascism Speaks Newspeak           | ███████████ (29)
-Rejection of Modernism               | ██████████ (27)
-Enemy is Both Strong and Weak        | █████████ (24)
-Contempt for the Weak                | ███████ (19)
-Pacifism is Trafficking with the Enemy | ███████ (19)
-Action for Action's Sake             | ██████ (16)
-Cult of Tradition                    | ████ (11)
-Everybody is Educated to Become a Hero | ██ (7)
+Selective Populism                     | ████████████████████████████████████████ (119)
+Obsession with a Plot                  | ████████████████████████████████████ (109)
+Machismo and Weaponry                  | ██████████████████████████ (78)
+Disagreement is Treason                | █████████████████ (53)
+Ur-Fascism Speaks Newspeak             | █████████ (29)
+Action for Action's Sake               | ███████ (21)
+Cult of Tradition                      | ████ (13)
+Appeal to Social Frustration           | ████ (12)
+Fear of Difference                     | ████ (12)
+Pacifism is Trafficking w/ the Enemy   | ██ (7)
+Rejection of Modernism                 | █ (4)
+Enemy is Both Strong and Weak          | █ (3)
+Contempt for the Weak                  |  (2)
 ```
 
 ### The Core Loop
@@ -143,6 +142,7 @@ The methodology established here—operationalizing qualitative frameworks into 
 1.  **Truth Social Monitoring**: Eager to apply this analysis to Trump's Truth Social posts to track the evolution of Ur-Fascist rhetoric in real-time.
 2.  **Autonomous Entity Extraction**: Integrating **LangGraph** to build a self-reasoning agent that can automatically extract and verify the specific actors, government agencies, and policy names linked to rhetorical traits, creating a high-fidelity "Influence Network."
 3.  **Cross-Document Comparison**: Benchmarking Project 2025 against historical fascist manifestos to identify unique modern "syncretisms."
+4.  **Academic Citations**: Adding a "Copy Citation" feature to quotes to facilitate academic referencing for students and researchers.
 
 ## Ode to LangChain & Gemini-3-Flash
 

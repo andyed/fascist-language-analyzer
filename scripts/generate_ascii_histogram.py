@@ -32,7 +32,11 @@ def generate_histogram():
     for chunk in data:
         for concept in chunk.get("concepts", []):
             trait = concept["trait"]
-            trait_counts[trait] += 1
+            # Normalize: remove leading numbers (e.g. "1. ") and trailing counts (e.g. " (13)")
+            import re
+            normalized = re.sub(r'^\d+\.\s*', '', trait)
+            normalized = re.sub(r'\s*\(\d+\)$', '', normalized)
+            trait_counts[normalized] += 1
 
     # Sort by count descending
     sorted_traits = trait_counts.most_common()
@@ -42,9 +46,10 @@ def generate_histogram():
     print("\n### Trait Frequency Histogram\n")
     print("```text")
     for trait, count in sorted_traits:
+        display_trait = trait.replace("Trafficking with the Enemy", "Trafficking w/ the Enemy")
         bar_len = int((count / max_count) * 40)
         bar = "█" * bar_len
-        label = trait.ljust(max_label_len)
+        label = display_trait.ljust(max_label_len)
         print(f"{label} | {bar} ({count})")
     print("```\n")
 

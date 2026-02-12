@@ -27,7 +27,6 @@ const Nav = () => (
   <nav style={{ padding: '1rem', background: '#333', color: 'white', display: 'flex', gap: '1rem', justifyContent: 'center' }}>
     <Link to="/" style={{ color: 'white' }}>Home (Graph)</Link>
     <Link to="/themes" style={{ color: 'white' }}>Analysis by Theme</Link>
-    <Link to="/system" style={{ color: '#ccffff' }}>System of Fascism</Link>
   </nav>
 );
 
