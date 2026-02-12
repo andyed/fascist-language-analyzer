@@ -114,8 +114,8 @@ The graph visualization reveals a strong **reinforcement loop** between the top 
 
 
 ### Explore the Data
-- **[Interactive Rhetoric Graph](https://andyed.github.io/fascist-language-analyzer/graph/)**
-- **[Static Analysis Site](https://andyed.github.io/fascist-language-analyzer/)**
+- **[Interactive Rhetoric Graph](https://andyed.github.io/fascist-language-analyzer/)**
+- **[Static Analysis Site](https://andyed.github.io/fascist-language-analyzer/docs/)**
 - **[Original Text Viewer](https://www.project2025.observer/en)** (External Resource)
 
 ## 🚀 Setup & Usage
