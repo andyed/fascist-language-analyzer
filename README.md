@@ -4,6 +4,19 @@ Chapter 1 is preserved in `README_chapter1.md`.
 
 This Chapter 2 README reframes the project around the entity extraction stack (`langextract`) and how it connects back to the Ur-Fascism rhetorical analysis.
 
+## Table of Contents
+
+- [What Chapter 2 Covers](#what-chapter-2-covers)
+- [System Overview](#system-overview)
+- [Analysis Highlights (First Release)](#analysis-highlights-first-release)
+- [LangExtract Deep Dive](#langextract-deep-dive)
+- [Entity ↔ Theme Linking (New in Chapter 2)](#entity--theme-linking-new-in-chapter-2)
+- [LangChain Summary (Condensed)](#langchain-summary-condensed)
+- [Setup & Run (Chapter 2)](#setup--run-chapter-2)
+- [GitHub Pages Artifact Sync](#github-pages-artifact-sync)
+- [Known Limits (Chapter 2)](#known-limits-chapter-2)
+- [Next Merge-Ready Targets](#next-merge-ready-targets)
+
 ## What Chapter 2 Covers
 
 - A technical deep dive into the LangExtract pipeline.
@@ -28,6 +41,21 @@ The repo now has two complementary tracks:
    - Purpose: extract grounded named entities/policies/laws/locations and normalize aliases.
 
 These tracks are fused in Chapter 2 visualizations through `scripts/build_entity_theme_links.py`.
+
+## Analysis Highlights (First Release)
+
+This first release uses `--score-mode raw` for ranking in entity↔theme links, with lift/PMI available for analysis.
+
+- Dominant linked themes (by aggregate edge weight) are **Selective Populism**, **Obsession with a Plot**, and **Machismo and Weaponry**.
+- Relationship mass is led by **government_agency** entities; location and person classes are secondary contributors.
+- Top recurring entity-side terms include broad governance labels (for example `State`, `Administration`, `President`, `department`), indicating strong institutional framing in theme-bearing passages.
+- Strongest edges repeatedly connect executive/administrative actors to Selective Populism and Obsession-with-a-Plot language.
+- Each edge now carries evidence with `quote`, `chunk_id`, and `source_url` for auditability.
+
+Quick interpretation guidance:
+
+- Treat this as a **macro rhetorical map** first, not final actor attribution.
+- Generic high-frequency entities can dominate raw rankings; lift/PMI is included to help de-bias follow-up analysis.
 
 ## LangExtract Deep Dive
 
@@ -235,7 +263,7 @@ cp web/public/entity_theme_data.json docs/graph/entity_theme_data.json
 ## Known Limits (Chapter 2)
 
 - Alias matching in entity↔theme linking is lexical and can over-link generic terms.
-- High-frequency entities can dominate edge ranking without normalization (PMI/lift pending).
+- High-frequency entities can dominate when using `--score-mode raw`; use `--score-mode lift` or `--score-mode pmi` for normalized views.
 - Table-of-contents style sections still introduce noisy entity contexts.
 
 ## Next Merge-Ready Targets
