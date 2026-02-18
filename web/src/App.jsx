@@ -27,6 +27,8 @@ const Nav = () => (
   <nav style={{ padding: '1rem', background: '#333', color: 'white', display: 'flex', gap: '1rem', justifyContent: 'center' }}>
     <Link to="/" style={{ color: 'white' }}>Home (Graph)</Link>
     <Link to="/themes" style={{ color: 'white' }}>Analysis by Theme</Link>
+    <Link to="/entities" style={{ color: 'white' }}>Entities</Link>
+    <a href="../entities/index.html" style={{ color: 'white' }}>Static Entity Index</a>
   </nav>
 );
 
@@ -449,6 +451,136 @@ const ThemePage = () => {
   );
 };
 
+const EntitiesList = () => {
+  const [entityData, setEntityData] = useState({ entity_classes: [], classes: {} });
+
+  useEffect(() => {
+    fetch('./entities_data.json')
+      .then(res => res.json())
+      .then(setEntityData)
+      .catch(() => setEntityData({ entity_classes: [], classes: {} }));
+  }, []);
+
+  return (
+    <div style={{ padding: '2rem', maxWidth: '1000px', margin: '0 auto' }}>
+      <h1 style={{ marginBottom: '0.6rem' }}>Entities</h1>
+      <p style={{ color: '#666' }}>
+        Browse extracted entities grouped by class. For SEO/crawlable pages, use the{' '}
+        <a href="../entities/index.html">static entity index</a>.
+      </p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1rem' }}>
+        {entityData.entity_classes.map(cls => {
+          const entities = (entityData.classes && entityData.classes[cls.id]) || [];
+          const top = entities.slice(0, 8);
+
+          return (
+            <div key={cls.id} style={{ border: '1px solid #eee', borderRadius: '8px', padding: '1rem', background: '#fafafa' }}>
+              <h3 style={{ marginTop: 0 }}>{cls.label}</h3>
+              <p style={{ margin: '0 0 0.8rem 0', color: '#666', fontSize: '0.9rem' }}>
+                {cls.entity_count} entities · {cls.mention_count} mentions
+              </p>
+              {top.map(entity => (
+                <div key={entity.id} style={{ marginBottom: '0.3rem' }}>
+                  <Link to={`/entity/${encodeURIComponent(entity.id)}`}>
+                    {entity.label}
+                  </Link>{' '}
+                  <span style={{ color: '#666', fontSize: '0.85rem' }}>({entity.count})</span>
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const EntityPage = () => {
+  const { entityId } = useParams();
+  const decodedId = decodeURIComponent(entityId);
+  const [entity, setEntity] = useState(null);
+
+  useEffect(() => {
+    fetch('./entities_data.json')
+      .then(res => res.json())
+      .then(data => {
+        const classes = data.classes || {};
+        for (const classId of Object.keys(classes)) {
+          const found = classes[classId].find(e => e.id === decodedId);
+          if (found) {
+            setEntity(found);
+            return;
+          }
+        }
+        setEntity(undefined);
+      })
+      .catch(() => setEntity(undefined));
+  }, [decodedId]);
+
+  if (entity === null) {
+    return <div style={{ padding: '2rem' }}>Loading entity...</div>;
+  }
+
+  if (entity === undefined) {
+    return (
+      <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
+        <Link to="/entities">← Back to Entities</Link>
+        <h1>Entity not found</h1>
+      </div>
+    );
+  }
+
+  const highlightMentions = (text, terms) => {
+    if (!text || !terms || terms.length === 0) return text;
+
+    const cleaned = Array.from(new Set(terms.filter(Boolean))).sort((a, b) => b.length - a.length);
+    if (cleaned.length === 0) return text;
+
+    const escaped = cleaned.map(term => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const regex = new RegExp(`(${escaped.join('|')})`, 'gi');
+    const parts = text.split(regex);
+
+    return parts.map((part, index) => {
+      if (cleaned.some(term => term.toLowerCase() === part.toLowerCase())) {
+        return <strong key={index}>{part}</strong>;
+      }
+      return <React.Fragment key={index}>{part}</React.Fragment>;
+    });
+  };
+
+  return (
+    <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
+      <Link to="/entities" style={{ display: 'inline-block', marginBottom: '1rem', color: '#666', textDecoration: 'none' }}>← Back to Entities</Link>
+      <h1 style={{ marginBottom: '0.4rem' }}>{entity.label}</h1>
+      <p style={{ marginTop: 0, color: '#666' }}>
+        {entity.entity_class} · {entity.count} mentions · normalized {entity.normalized_count} ({entity.normalized_rate_percent}%)
+      </p>
+
+      {entity.mention_samples?.length > 0 && (
+        <div style={{ marginBottom: '1rem' }}>
+          <strong>Surface forms:</strong>{' '}
+          {entity.mention_samples.join(' · ')}
+        </div>
+      )}
+
+      <p style={{ color: '#666', marginTop: 0 }}>
+        Showing {entity.snippets?.length || 0} context snippets for {entity.count} total mentions.
+      </p>
+
+      {(entity.snippets || []).map((snippet, i) => (
+        <div key={i} style={{ background: '#f9f9f9', borderLeft: '4px solid #ccc', padding: '1rem', marginBottom: '0.7rem' }}>
+          {highlightMentions(snippet, entity.mention_samples || [])}
+        </div>
+      ))}
+
+      <p>
+        <a href={`../entities/${entity.entity_class.replaceAll('_', '-')}.html`}>Open grouped static page</a>
+      </p>
+    </div>
+  );
+};
+
 
 const GitHubRibbon = () => (
   <a href="https://github.com/andyed/fascist-language-analyzer" target="_blank" rel="noopener noreferrer" className="github-corner" aria-label="View source on GitHub">
@@ -480,6 +612,8 @@ const App = () => {
           <Route path="/" element={<GraphView />} />
           <Route path="/themes" element={<ThemeList />} />
           <Route path="/theme/:traitId" element={<ThemePage />} />
+          <Route path="/entities" element={<EntitiesList />} />
+          <Route path="/entity/:entityId" element={<EntityPage />} />
         </Routes>
       </div>
     </Router>

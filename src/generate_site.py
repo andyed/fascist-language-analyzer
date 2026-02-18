@@ -1,10 +1,11 @@
+import argparse
 import json
 import os
-import shutil
 
 INPUT_FILE = "data/analysis_results.json"
 OUTPUT_DIR = "docs"
 THEMES_DIR = os.path.join(OUTPUT_DIR, "themes")
+DEFAULT_MAX_ITEMS_PER_THEME = 50
 
 TRAIT_COLORS = {
     "Cult of Tradition": "#ffcccc",
@@ -32,6 +33,17 @@ def load_data():
 def slugify(text):
     return text.lower().replace(" ", "-").replace("'", "")
 
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Generate static theme pages for docs/")
+    parser.add_argument(
+        "--max-items-per-theme",
+        type=int,
+        default=DEFAULT_MAX_ITEMS_PER_THEME,
+        help="Max quote cards per theme page (0 means no cap)",
+    )
+    return parser.parse_args()
+
 def generate_header(title, depth=0):
     root = "../" * depth
     nav = f"""
@@ -39,6 +51,7 @@ def generate_header(title, depth=0):
         <a href="{root}index.html" style="color: #fff; margin: 0 1rem; text-decoration: none;">Home</a>
         <a href="{root}themes_explained.html" style="color: #fff; margin: 0 1rem; text-decoration: none;">Themes & Sources</a>
         <a href="{root}graph/index.html" style="color: #fff; margin: 0 1rem; text-decoration: none;">Interactive Graph</a>
+        <a href="{root}entities/index.html" style="color: #fff; margin: 0 1rem; text-decoration: none;">Entity Index</a>
         <a href="{root}ode.html" style="color: #fff; margin: 0 1rem; text-decoration: none;">The Ode</a>
     </nav>
     """
@@ -121,7 +134,7 @@ def generate_about_themes():
     with open(os.path.join(OUTPUT_DIR, "themes_explained.html"), "w") as f:
         f.write(html)
 
-def generate_theme_pages(data):
+def generate_theme_pages(data, max_items_per_theme):
     os.makedirs(THEMES_DIR, exist_ok=True)
     
     # Group by trait
@@ -146,10 +159,14 @@ def generate_theme_pages(data):
         themes_index += f'<li><a href="themes/{filename}">{trait}</a> ({len(items)})</li>'
         
         # content
+        display_items = items if max_items_per_theme <= 0 else items[:max_items_per_theme]
+
         html = generate_header(f"Trait: {trait}", depth=1)
         html += f"<p>Found {len(items)} instances of this trait.</p>"
+        if max_items_per_theme > 0 and len(items) > len(display_items):
+            html += f"<p>Showing top {len(display_items)} instances on this static page.</p>"
         
-        for item in items:
+        for item in display_items:
             color = TRAIT_COLORS.get(trait, "#ccc")
             html += f"""
             <div class="quote-card" style="border-left-color: {color}">
@@ -189,6 +206,11 @@ def generate_landing(themes_list, data):
             <p>Visualize the connections between text segments and fascist traits.</p>
             <a href="graph/index.html" style="display: inline-block; padding: 0.8rem 1.5rem; background: #0066cc; color: #fff; border-radius: 4px; text-decoration: none; font-weight: bold;">Launch Graph View</a>
         </div>
+        <div style="flex: 1; padding: 1.5rem; border: 1px solid #ddd; border-radius: 8px;">
+            <h3>🏷️ Entity Index</h3>
+            <p>Browse extracted people, agencies, organizations, policies, legal references, and locations.</p>
+            <a href="entities/index.html" style="display: inline-block; padding: 0.8rem 1.5rem; background: #0066cc; color: #fff; border-radius: 4px; text-decoration: none; font-weight: bold;">Browse Entities</a>
+        </div>
     </div>
     """
     
@@ -197,6 +219,7 @@ def generate_landing(themes_list, data):
         f.write(html)
 
 def main():
+    args = parse_args()
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     
     print("Loading data...")
@@ -206,7 +229,7 @@ def main():
         return
 
     print("Generating Theme Pages...")
-    themes_list = generate_theme_pages(data)
+    themes_list = generate_theme_pages(data, args.max_items_per_theme)
     
     print("Generating Themes Explanation...")
     generate_about_themes()

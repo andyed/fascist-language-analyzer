@@ -139,7 +139,10 @@ npm install --prefix web
 python src/main.py
 
 # Generate Site
-python src/generate_site.py
+python src/generate_site.py --max-items-per-theme 50
+
+# Generate grouped static entity index pages + Vite entity data
+python scripts/generate_entity_index_pages.py --max-entities-per-class 50
 
 # Build React App
 npm run build --prefix web
