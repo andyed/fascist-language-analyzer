@@ -6,6 +6,8 @@ This Chapter 2 README reframes the project around the entity extraction stack (`
 
 ## Table of Contents
 
+- [Open the Web App](#open-the-web-app)
+- [Web App Functions](#web-app-functions)
 - [What Chapter 2 Covers](#what-chapter-2-covers)
 - [System Overview](#system-overview)
 - [Analysis Highlights (First Release)](#analysis-highlights-first-release)
@@ -16,6 +18,43 @@ This Chapter 2 README reframes the project around the entity extraction stack (`
 - [GitHub Pages Artifact Sync](#github-pages-artifact-sync)
 - [Known Limits (Chapter 2)](#known-limits-chapter-2)
 - [Next Merge-Ready Targets](#next-merge-ready-targets)
+
+## Open the Web App
+
+**Live app (GitHub Pages):**
+
+- https://andyed.github.io/fascist-language-analyzer/
+
+**Direct routes:**
+
+- Theme browser: https://andyed.github.io/fascist-language-analyzer/#/themes
+- Entity browser: https://andyed.github.io/fascist-language-analyzer/#/entities
+- Entity ↔ Theme graph: https://andyed.github.io/fascist-language-analyzer/#/entity-themes
+
+**Local dev app:**
+
+- Run `npm run dev --prefix web`
+- Open `http://localhost:3001/`
+
+## Web App Functions
+
+The web app has four core views:
+
+1. **Rhetoric Graph (`#/`)**
+  - Interactive network of chunk-to-theme relationships.
+  - Useful for seeing macro rhetorical structure.
+
+2. **Theme Browser (`#/themes`, `#/theme/:traitId`)**
+  - Theme-by-theme exploration of extracted quotes, explanations, and confidence.
+  - Fast path for reviewing evidence by Eco trait.
+
+3. **Entity Browser (`#/entities`, `#/entity/:entityId`)**
+  - Canonicalized entity index (people, agencies, organizations, policies, legal refs, locations).
+  - Entity detail pages include highlighted context snippets and mention counts.
+
+4. **Entity ↔ Theme View (`#/entity-themes`)**
+  - Cross-links entities to themes using co-mention evidence.
+  - Supports score inspection (`raw`, `lift`, `pmi` in data), edge filtering, and quote provenance (`chunk_id`, source link).
 
 ## What Chapter 2 Covers
 
@@ -48,6 +87,7 @@ This first release uses `--score-mode raw` for ranking in entity↔theme links, 
 
 - Dominant linked themes (by aggregate edge weight) are **Selective Populism**, **Obsession with a Plot**, and **Machismo and Weaponry**.
 - Relationship mass is led by **government_agency** entities; location and person classes are secondary contributors.
+- A recurring narrative pattern frames government organizations and administrative bodies as impediments to democratic intent, often paired with calls to centralize authority under aligned executive control.
 - Top recurring entity-side terms include broad governance labels (for example `State`, `Administration`, `President`, `department`), indicating strong institutional framing in theme-bearing passages.
 - Strongest edges repeatedly connect executive/administrative actors to Selective Populism and Obsession-with-a-Plot language.
 - Each edge now carries evidence with `quote`, `chunk_id`, and `source_url` for auditability.
