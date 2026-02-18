@@ -145,6 +145,111 @@ python src/generate_site.py
 npm run build --prefix web
 ```
 
+### Entity Extraction Prototype (LangExtract)
+
+```bash
+# Set one API key (Gemini recommended)
+export LANGEXTRACT_API_KEY="your-key"
+
+# Run entity extraction on Project 2025 text
+python scripts/extract_entities_langextract.py --model-id gemini-2.5-flash
+```
+
+Scale run on full corpus (auto-detects Poe credentials from `.env`):
+
+```bash
+python scripts/extract_entities_langextract.py \
+	--model-id Gemini-3-Flash \
+	--provider-mode auto \
+	--extraction-passes 2 \
+	--max-workers 20 \
+	--max-char-buffer 1200
+
+python scripts/normalize_entities.py \
+	--mode lenient \
+	--input data/entities_langextract.jsonl \
+	--output data/entities_langextract.normalized.jsonl \
+	--report data/entities_langextract.normalization_report.json
+```
+
+Estimate calls/tokens/cost before running:
+
+```bash
+python scripts/estimate_run_cost.py \
+	--input data/project_2025.txt \
+	--max-char-buffer 1200 \
+	--extraction-passes 2
+
+# Optional pricing inputs (USD per 1M tokens)
+python scripts/estimate_run_cost.py \
+	--input-price-per-1m 0.1 \
+	--output-price-per-1m 0.4
+
+# Gemini-3-Flash example with USD + points
+python scripts/estimate_run_cost.py \
+	--input-price-per-1m 0.40 \
+	--output-price-per-1m 2.40 \
+	--input-points-per-1k 14 \
+	--output-points-per-1k 80
+```
+
+Outputs:
+- `data/entities_langextract.jsonl` (structured grounded extractions)
+- `data/entities_langextract.html` (interactive visualization)
+
+Normalize extracted entities to canonical IDs:
+
+```bash
+python scripts/normalize_entities.py \
+	--input data/entities_langextract.jsonl \
+	--output data/entities_langextract.normalized.jsonl \
+	--report data/entities_langextract.normalization_report.json
+```
+
+Mode options:
+- `--mode lenient` (default): acronym/parenthetical/title-boundary-aware alias resolution.
+- `--mode strict`: exact alias normalization only.
+
+Person canonicalization:
+- By default, person aliases are derived from `data/gold/entities_gold_v0.jsonl`.
+- Disable with `--disable-person-canonical`.
+- Override source with `--person-gold <path>`.
+
+Normalization outputs:
+- `data/entities_langextract.normalized.jsonl` (same records with `canonical_id` + `canonical_label`)
+- `data/entities_langextract.normalization_report.json` (coverage, unresolved mentions, alias collisions)
+
+### Gold Set (v0) + Evaluation
+
+Initial hand-labeled gold set:
+- `data/gold/entities_gold_v0.jsonl`
+
+Generate predictions for the gold snippets (Poe OpenAI-compatible endpoint):
+
+```bash
+python scripts/predict_gold_langextract.py \
+	--gold data/gold/entities_gold_v0.jsonl \
+	--pred data/gold/entities_pred_v0.jsonl \
+	--model-id Gemini-3-Flash
+```
+
+Evaluate prediction JSONL against the gold set:
+
+```bash
+python scripts/evaluate_entity_gold.py \
+	--gold data/gold/entities_gold_v0.jsonl \
+	--pred data/gold/entities_pred_v0.jsonl \
+	--report data/gold/entities_eval_report_v0.json
+```
+
+Mode options:
+- `--mode strict` (default): exact normalized text matching.
+- `--mode lenient`: acronym/parenthetical/title-boundary-aware matching for baseline diagnostics.
+
+Notes:
+- Both files are JSONL with records containing `id`, `text`, and `extractions`.
+- Evaluation uses normalized exact matching on `(extraction_class, extraction_text)`.
+
 ## 🔮 Future Directions
 
 The methodology established here—operationalizing qualitative frameworks into structured LLM prompts—can be applied to ongoing political communications for real-time monitoring.
