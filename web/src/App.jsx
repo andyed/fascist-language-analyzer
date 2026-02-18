@@ -611,6 +611,7 @@ const EntityThemeView = () => {
 
   const allNodes = data.graph.nodes || [];
   const allLinks = data.graph.links || [];
+  const scoreMode = data?.meta?.score_mode || 'raw';
 
   const idOf = value => (typeof value === 'object' && value !== null ? value.id : value);
 
@@ -634,7 +635,7 @@ const EntityThemeView = () => {
     <div style={{ padding: '1.5rem', maxWidth: '1200px', margin: '0 auto' }}>
       <h1 style={{ marginBottom: '0.4rem' }}>Entity × Theme Relationships</h1>
       <p style={{ color: '#666', marginTop: 0 }}>
-        Co-mention graph from analysis quote/explanation text. Themes are labeled, entities are dots (hover to inspect).
+        Co-mention graph from analysis quote/explanation text. Themes are labeled, entities are dots (hover to inspect). Score mode: {scoreMode}.
       </p>
 
       <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem', alignItems: 'center' }}>
@@ -767,13 +768,26 @@ const EntityThemeView = () => {
         <div style={{ background: '#fafafa', border: '1px solid #eee', borderRadius: '8px', padding: '1rem', marginBottom: '1rem' }}>
           <h3 style={{ marginTop: 0 }}>{selected.value.entity_label} ↔ {selected.value.theme}</h3>
           <p style={{ marginTop: 0, color: '#666' }}>
-            Weight: {selected.value.weight} · Matches: {selected.value.count}
+            Score ({selected.value.score_mode || scoreMode}): {selected.value.weight} · Raw weight: {selected.value.raw_weight ?? selected.value.weight} · Lift: {selected.value.lift ?? 'n/a'} · PMI: {selected.value.pmi ?? 'n/a'} · Matches: {selected.value.count}
           </p>
-          {(selected.value.evidence || []).map((ev, i) => (
-            <blockquote key={i} style={{ margin: '0.5rem 0', paddingLeft: '0.8rem', borderLeft: '3px solid #ddd' }}>
-              {ev}
-            </blockquote>
-          ))}
+          {(selected.value.evidence || []).map((ev, i) => {
+            const quote = typeof ev === 'string' ? ev : ev.quote;
+            const chunkId = typeof ev === 'string' ? null : ev.chunk_id;
+            const sourceUrl = typeof ev === 'string' ? null : ev.source_url;
+            return (
+              <blockquote key={i} style={{ margin: '0.5rem 0', paddingLeft: '0.8rem', borderLeft: '3px solid #ddd' }}>
+                <div>{quote}</div>
+                <div style={{ color: '#666', fontSize: '0.85rem', marginTop: '0.3rem' }}>
+                  {chunkId !== null && chunkId !== undefined ? <>Chunk {chunkId}</> : <>Chunk n/a</>}
+                  {sourceUrl && (
+                    <>
+                      {' '}· <a href={sourceUrl} target="_blank" rel="noreferrer">Source doc</a>
+                    </>
+                  )}
+                </div>
+              </blockquote>
+            );
+          })}
         </div>
       )}
 
@@ -786,11 +800,23 @@ const EntityThemeView = () => {
               {' '}↔ <strong>{edge.theme}</strong>
             </div>
             <div style={{ color: '#666', fontSize: '0.9rem' }}>
-              Weight {edge.weight} · Matches {edge.count} · {edge.entity_class}
+              Score ({edge.score_mode || scoreMode}) {edge.weight} · Raw {edge.raw_weight ?? edge.weight} · Lift {edge.lift ?? 'n/a'} · PMI {edge.pmi ?? 'n/a'} · Matches {edge.count} · {edge.entity_class}
             </div>
             {edge.evidence?.[0] && (
               <div style={{ marginTop: '0.4rem', fontSize: '0.92rem' }}>
-                “{edge.evidence[0]}”
+                {(() => {
+                  const ev = edge.evidence[0];
+                  const quote = typeof ev === 'string' ? ev : ev.quote;
+                  const chunkId = typeof ev === 'string' ? null : ev.chunk_id;
+                  return (
+                    <>
+                      “{quote}”
+                      {chunkId !== null && chunkId !== undefined && (
+                        <span style={{ color: '#666' }}> (chunk {chunkId})</span>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             )}
           </div>

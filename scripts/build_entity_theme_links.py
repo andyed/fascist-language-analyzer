@@ -1,5 +1,6 @@
 import argparse
 import json
+import math
 import re
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -7,6 +8,7 @@ from pathlib import Path
 DEFAULT_ANALYSIS = "data/analysis_results.json"
 DEFAULT_ENTITIES = "web/public/entities_data.json"
 DEFAULT_OUTPUT = "web/public/entity_theme_data.json"
+DEFAULT_SOURCE_DOC_URL = "https://www.project2025.observer/en"
 
 
 def parse_args() -> argparse.Namespace:
@@ -16,6 +18,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--analysis", default=DEFAULT_ANALYSIS, help="Analysis JSON path")
     parser.add_argument("--entities", default=DEFAULT_ENTITIES, help="Entity data JSON path")
     parser.add_argument("--output", default=DEFAULT_OUTPUT, help="Output JSON path")
+    parser.add_argument(
+        "--score-mode",
+        choices=["raw", "lift", "pmi"],
+        default="raw",
+        help="Edge ranking/visualization score",
+    )
+    parser.add_argument(
+        "--source-doc-url",
+        default=DEFAULT_SOURCE_DOC_URL,
+        help="Canonical source document URL to include with evidence",
+    )
     parser.add_argument(
         "--max-entities",
         type=int,
@@ -112,6 +125,8 @@ def main() -> None:
 
     edge_weights: dict[tuple[str, str], dict] = {}
     theme_counts = Counter()
+    entity_match_counts = Counter()
+    total_concepts = 0
 
     for chunk in analysis:
         for concept in chunk.get("concepts", []):
@@ -119,10 +134,12 @@ def main() -> None:
             quote = canonical_space(concept.get("quote", ""))
             explanation = canonical_space(concept.get("explanation", ""))
             confidence = float(concept.get("confidence", 0.5) or 0.5)
+            chunk_id = chunk.get("chunk_id")
 
             if not theme or not quote:
                 continue
 
+            total_concepts += 1
             theme_counts[theme] += 1
             body_lower = normalize_phrase(f"{quote} {explanation}")
 
@@ -132,27 +149,59 @@ def main() -> None:
                     matched_entity_ids.append(entity["id"])
 
             for entity_id in matched_entity_ids:
+                entity_match_counts[entity_id] += 1
                 key = (entity_id, theme)
                 rec = edge_weights.get(key)
                 if rec is None:
                     rec = {
                         "entity_id": entity_id,
                         "theme": theme,
-                        "weight": 0.0,
+                        "raw_weight": 0.0,
                         "count": 0,
                         "evidence": [],
                     }
                     edge_weights[key] = rec
 
-                rec["weight"] += confidence
+                rec["raw_weight"] += confidence
                 rec["count"] += 1
-                if quote and len(rec["evidence"]) < args.max_evidence and quote not in rec["evidence"]:
-                    rec["evidence"].append(quote)
+                if quote and len(rec["evidence"]) < args.max_evidence:
+                    candidate = {
+                        "quote": quote,
+                        "chunk_id": chunk_id,
+                        "confidence": round(confidence, 3),
+                        "source_url": args.source_doc_url,
+                    }
+                    if candidate not in rec["evidence"]:
+                        rec["evidence"].append(candidate)
+
+    epsilon = 1e-12
+    for rec in edge_weights.values():
+        entity_count = entity_match_counts[rec["entity_id"]]
+        theme_count = theme_counts[rec["theme"]]
+        joint_count = rec["count"]
+
+        p_entity = entity_count / max(total_concepts, 1)
+        p_theme = theme_count / max(total_concepts, 1)
+        p_joint = joint_count / max(total_concepts, 1)
+
+        lift = p_joint / max(p_entity * p_theme, epsilon)
+        pmi = math.log2((p_joint + epsilon) / max(p_entity * p_theme, epsilon))
+
+        rec["lift"] = round(lift, 6)
+        rec["pmi"] = round(pmi, 6)
+        rec["weight"] = round(rec["raw_weight"], 6)
+
+        if args.score_mode == "lift":
+            rec["score"] = rec["lift"]
+        elif args.score_mode == "pmi":
+            rec["score"] = rec["pmi"]
+        else:
+            rec["score"] = rec["weight"]
 
     entity_lookup = {entity["id"]: entity for entity in entities}
 
     links = list(edge_weights.values())
-    links.sort(key=lambda l: (-l["weight"], -l["count"], l["theme"], l["entity_id"]))
+    links.sort(key=lambda l: (-l["score"], -l["weight"], -l["count"], l["theme"], l["entity_id"]))
     if args.max_links > 0:
         links = links[: args.max_links]
 
@@ -187,7 +236,11 @@ def main() -> None:
         {
             "source": link["entity_id"],
             "target": link["theme"],
-            "value": round(link["weight"], 3),
+            "value": round(link["score"], 3),
+            "score_mode": args.score_mode,
+            "raw_weight": round(link["weight"], 3),
+            "lift": round(link["lift"], 3),
+            "pmi": round(link["pmi"], 3),
             "count": link["count"],
         }
         for link in links
@@ -202,7 +255,11 @@ def main() -> None:
                 "entity_label": entity["label"],
                 "entity_class": entity["entity_class"],
                 "theme": link["theme"],
-                "weight": round(link["weight"], 3),
+                "score_mode": args.score_mode,
+                "weight": round(link["score"], 3),
+                "raw_weight": round(link["weight"], 3),
+                "lift": round(link["lift"], 3),
+                "pmi": round(link["pmi"], 3),
                 "count": link["count"],
                 "evidence": link["evidence"],
             }
@@ -210,13 +267,15 @@ def main() -> None:
 
     matrix = defaultdict(dict)
     for link in links:
-        matrix[link["entity_id"]][link["theme"]] = round(link["weight"], 3)
+        matrix[link["entity_id"]][link["theme"]] = round(link["score"], 3)
 
     output = {
         "meta": {
             "analysis_file": str(analysis_path),
             "entities_file": str(entities_path),
             "matching": "entity aliases matched in quote+explanation text",
+            "score_mode": args.score_mode,
+            "total_concepts_considered": total_concepts,
             "entity_pool_size": len(entities),
             "link_count": len(links),
             "theme_count": len(used_themes),
