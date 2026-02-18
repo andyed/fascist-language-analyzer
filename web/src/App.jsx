@@ -27,6 +27,9 @@ const Nav = () => (
   <nav style={{ padding: '1rem', background: '#333', color: 'white', display: 'flex', gap: '1rem', justifyContent: 'center' }}>
     <Link to="/" style={{ color: 'white' }}>Home (Graph)</Link>
     <Link to="/themes" style={{ color: 'white' }}>Analysis by Theme</Link>
+    <Link to="/entities" style={{ color: 'white' }}>Entities</Link>
+    <Link to="/entity-themes" style={{ color: 'white' }}>Entity × Themes</Link>
+    <a href="../entities/index.html" style={{ color: 'white' }}>Static Entity Index</a>
   </nav>
 );
 
@@ -449,6 +452,380 @@ const ThemePage = () => {
   );
 };
 
+const EntitiesList = () => {
+  const [entityData, setEntityData] = useState({ entity_classes: [], classes: {} });
+
+  useEffect(() => {
+    fetch('./entities_data.json')
+      .then(res => res.json())
+      .then(setEntityData)
+      .catch(() => setEntityData({ entity_classes: [], classes: {} }));
+  }, []);
+
+  return (
+    <div style={{ padding: '2rem', maxWidth: '1000px', margin: '0 auto' }}>
+      <h1 style={{ marginBottom: '0.6rem' }}>Entities</h1>
+      <p style={{ color: '#666' }}>
+        Browse extracted entities grouped by class. For SEO/crawlable pages, use the{' '}
+        <a href="../entities/index.html">static entity index</a>.
+      </p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1rem' }}>
+        {entityData.entity_classes.map(cls => {
+          const entities = (entityData.classes && entityData.classes[cls.id]) || [];
+          const top = entities.slice(0, 8);
+
+          return (
+            <div key={cls.id} style={{ border: '1px solid #eee', borderRadius: '8px', padding: '1rem', background: '#fafafa' }}>
+              <h3 style={{ marginTop: 0 }}>{cls.label}</h3>
+              <p style={{ margin: '0 0 0.8rem 0', color: '#666', fontSize: '0.9rem' }}>
+                {cls.entity_count} entities · {cls.mention_count} mentions
+              </p>
+              {top.map(entity => (
+                <div key={entity.id} style={{ marginBottom: '0.3rem' }}>
+                  <Link to={`/entity/${encodeURIComponent(entity.id)}`}>
+                    {entity.label}
+                  </Link>{' '}
+                  <span style={{ color: '#666', fontSize: '0.85rem' }}>({entity.count})</span>
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const EntityPage = () => {
+  const { entityId } = useParams();
+  const decodedId = decodeURIComponent(entityId);
+  const [entity, setEntity] = useState(null);
+
+  useEffect(() => {
+    fetch('./entities_data.json')
+      .then(res => res.json())
+      .then(data => {
+        const classes = data.classes || {};
+        for (const classId of Object.keys(classes)) {
+          const found = classes[classId].find(e => e.id === decodedId);
+          if (found) {
+            setEntity(found);
+            return;
+          }
+        }
+        setEntity(undefined);
+      })
+      .catch(() => setEntity(undefined));
+  }, [decodedId]);
+
+  if (entity === null) {
+    return <div style={{ padding: '2rem' }}>Loading entity...</div>;
+  }
+
+  if (entity === undefined) {
+    return (
+      <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
+        <Link to="/entities">← Back to Entities</Link>
+        <h1>Entity not found</h1>
+      </div>
+    );
+  }
+
+  const highlightMentions = (text, terms) => {
+    if (!text || !terms || terms.length === 0) return text;
+
+    const cleaned = Array.from(new Set(terms.filter(Boolean))).sort((a, b) => b.length - a.length);
+    if (cleaned.length === 0) return text;
+
+    const escaped = cleaned.map(term => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const regex = new RegExp(`(${escaped.join('|')})`, 'gi');
+    const parts = text.split(regex);
+
+    return parts.map((part, index) => {
+      if (cleaned.some(term => term.toLowerCase() === part.toLowerCase())) {
+        return <strong key={index}>{part}</strong>;
+      }
+      return <React.Fragment key={index}>{part}</React.Fragment>;
+    });
+  };
+
+  return (
+    <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
+      <Link to="/entities" style={{ display: 'inline-block', marginBottom: '1rem', color: '#666', textDecoration: 'none' }}>← Back to Entities</Link>
+      <h1 style={{ marginBottom: '0.4rem' }}>{entity.label}</h1>
+      <p style={{ marginTop: 0, color: '#666' }}>
+        {entity.entity_class} · {entity.count} mentions · normalized {entity.normalized_count} ({entity.normalized_rate_percent}%)
+      </p>
+
+      {entity.mention_samples?.length > 0 && (
+        <div style={{ marginBottom: '1rem' }}>
+          <strong>Surface forms:</strong>{' '}
+          {entity.mention_samples.join(' · ')}
+        </div>
+      )}
+
+      <p style={{ color: '#666', marginTop: 0 }}>
+        Showing {entity.snippets?.length || 0} context snippets for {entity.count} total mentions.
+      </p>
+
+      {(entity.snippets || []).map((snippet, i) => (
+        <div key={i} style={{ background: '#f9f9f9', borderLeft: '4px solid #ccc', padding: '1rem', marginBottom: '0.7rem' }}>
+          {highlightMentions(snippet, entity.mention_samples || [])}
+        </div>
+      ))}
+
+      <p>
+        <a href={`../entities/${entity.entity_class.replaceAll('_', '-')}.html`}>Open grouped static page</a>
+      </p>
+    </div>
+  );
+};
+
+const EntityThemeView = () => {
+  const [data, setData] = useState(null);
+  const [selected, setSelected] = useState(null);
+  const [minWeight, setMinWeight] = useState(2.5);
+  const [maxLinks, setMaxLinks] = useState(140);
+  const [hoveredNodeId, setHoveredNodeId] = useState(null);
+
+  useEffect(() => {
+    fetch('./entity_theme_data.json')
+      .then(res => res.json())
+      .then(setData)
+      .catch(() => setData(undefined));
+  }, []);
+
+  if (data === null) {
+    return <div style={{ padding: '2rem' }}>Loading entity-theme relationships...</div>;
+  }
+
+  if (data === undefined || !data.graph) {
+    return (
+      <div style={{ padding: '2rem', maxWidth: '900px', margin: '0 auto' }}>
+        <h1>Entity × Theme Relationships</h1>
+        <p>Relationship data not found. Generate `web/public/entity_theme_data.json` first.</p>
+      </div>
+    );
+  }
+
+  const allNodes = data.graph.nodes || [];
+  const allLinks = data.graph.links || [];
+  const scoreMode = data?.meta?.score_mode || 'raw';
+
+  const idOf = value => (typeof value === 'object' && value !== null ? value.id : value);
+
+  const filteredLinks = allLinks
+    .filter(link => (link.value || 0) >= minWeight)
+    .sort((a, b) => (b.value || 0) - (a.value || 0))
+    .slice(0, maxLinks);
+
+  const activeNodeIds = new Set();
+  filteredLinks.forEach(link => {
+    activeNodeIds.add(idOf(link.source));
+    activeNodeIds.add(idOf(link.target));
+  });
+
+  const filteredNodes = allNodes.filter(node => activeNodeIds.has(node.id));
+  const filteredTopEdges = (data.top_edges || [])
+    .filter(edge => edge.weight >= minWeight)
+    .slice(0, 80);
+
+  return (
+    <div style={{ padding: '1.5rem', maxWidth: '1200px', margin: '0 auto' }}>
+      <h1 style={{ marginBottom: '0.4rem' }}>Entity × Theme Relationships</h1>
+      <p style={{ color: '#666', marginTop: 0 }}>
+        Co-mention graph from analysis quote/explanation text. Themes are labeled, entities are dots (hover to inspect). Score mode: {scoreMode}.
+      </p>
+
+      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem', alignItems: 'center' }}>
+        <label style={{ fontSize: '0.9rem' }}>
+          Min edge weight: <strong>{minWeight.toFixed(1)}</strong>{' '}
+          <input
+            type="range"
+            min="0.5"
+            max="8"
+            step="0.1"
+            value={minWeight}
+            onChange={e => setMinWeight(parseFloat(e.target.value))}
+            style={{ verticalAlign: 'middle', marginLeft: '0.4rem' }}
+          />
+        </label>
+        <label style={{ fontSize: '0.9rem' }}>
+          Max links:{' '}
+          <select value={maxLinks} onChange={e => setMaxLinks(parseInt(e.target.value, 10))}>
+            <option value={80}>80</option>
+            <option value={120}>120</option>
+            <option value={140}>140</option>
+            <option value={180}>180</option>
+            <option value={240}>240</option>
+          </select>
+        </label>
+        <span style={{ color: '#666', fontSize: '0.9rem' }}>
+          Showing {filteredNodes.length} nodes / {filteredLinks.length} links
+        </span>
+      </div>
+
+      <div style={{ height: '55vh', border: '1px solid #e5e5e5', borderRadius: '8px', marginBottom: '1rem' }}>
+        <ForceGraph2D
+          graphData={{ nodes: filteredNodes, links: filteredLinks }}
+          d3AlphaDecay={0.03}
+          d3VelocityDecay={0.4}
+          cooldownTicks={120}
+          linkWidth={link => Math.max(0.8, Math.min(5, (link.value || 1) / 2))}
+          linkColor={() => 'rgba(120,120,120,0.35)'}
+          nodeLabel={node => {
+            if (node.group === 'theme') {
+              return `${node.label} (theme)`;
+            }
+            return `${node.label} (${node.entity_class})`;
+          }}
+          nodeCanvasObject={(node, ctx, globalScale) => {
+            const label = node.label || node.id;
+            const isTheme = node.group === 'theme';
+            const isHovered = hoveredNodeId === node.id;
+
+            if (isTheme) {
+              const fontSize = 12 / globalScale;
+              ctx.font = `bold ${fontSize}px Sans-Serif`;
+              const textWidth = ctx.measureText(label).width;
+              const padding = 4 / globalScale;
+              const boxW = textWidth + padding * 2;
+              const boxH = fontSize + padding * 2;
+
+              ctx.fillStyle = '#ffe0e0';
+              ctx.fillRect(node.x - boxW / 2, node.y - boxH / 2, boxW, boxH);
+
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillStyle = '#222';
+              ctx.fillText(label, node.x, node.y);
+
+              node.__bckgDimensions = [boxW, boxH];
+              return;
+            }
+
+            const radius = Math.max(1.8, Math.min(6, ((node.count || 1) / 40) + 2));
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI, false);
+            ctx.fillStyle = '#6da6e8';
+            ctx.fill();
+
+            if (isHovered) {
+              const fontSize = 10 / globalScale;
+              ctx.font = `${fontSize}px Sans-Serif`;
+              const textWidth = ctx.measureText(label).width;
+              const pad = 3 / globalScale;
+              const lx = node.x + radius + 4 / globalScale;
+              const ly = node.y - radius - 2 / globalScale;
+
+              ctx.fillStyle = 'rgba(255,255,255,0.92)';
+              ctx.fillRect(lx - pad, ly - fontSize, textWidth + pad * 2, fontSize + pad * 2);
+              ctx.fillStyle = '#111';
+              ctx.textAlign = 'left';
+              ctx.textBaseline = 'alphabetic';
+              ctx.fillText(label, lx, ly);
+            }
+
+            node.__radius = radius;
+          }}
+          nodePointerAreaPaint={(node, color, ctx) => {
+            ctx.fillStyle = color;
+            if (node.group === 'theme') {
+              const d = node.__bckgDimensions;
+              if (d) {
+                ctx.fillRect(node.x - d[0] / 2, node.y - d[1] / 2, d[0], d[1]);
+              }
+            } else {
+              const r = node.__radius || 3;
+              ctx.beginPath();
+              ctx.arc(node.x, node.y, r + 2, 0, 2 * Math.PI, false);
+              ctx.fill();
+            }
+          }}
+          onNodeHover={node => setHoveredNodeId(node?.id || null)}
+          onNodeClick={node => {
+            if (node.group === 'entity') {
+              window.location.hash = `#/entity/${encodeURIComponent(node.id)}`;
+              return;
+            }
+            setSelected({ type: 'theme', value: node.id });
+          }}
+          onLinkClick={link => {
+            const sourceId = idOf(link.source);
+            const targetId = idOf(link.target);
+            const match = filteredTopEdges.find(
+              e => e.entity_id === sourceId && e.theme === targetId
+            );
+            if (match) {
+              setSelected({ type: 'edge', value: match });
+            }
+          }}
+        />
+      </div>
+
+      {selected?.type === 'edge' && (
+        <div style={{ background: '#fafafa', border: '1px solid #eee', borderRadius: '8px', padding: '1rem', marginBottom: '1rem' }}>
+          <h3 style={{ marginTop: 0 }}>{selected.value.entity_label} ↔ {selected.value.theme}</h3>
+          <p style={{ marginTop: 0, color: '#666' }}>
+            Score ({selected.value.score_mode || scoreMode}): {selected.value.weight} · Raw weight: {selected.value.raw_weight ?? selected.value.weight} · Lift: {selected.value.lift ?? 'n/a'} · PMI: {selected.value.pmi ?? 'n/a'} · Matches: {selected.value.count}
+          </p>
+          {(selected.value.evidence || []).map((ev, i) => {
+            const quote = typeof ev === 'string' ? ev : ev.quote;
+            const chunkId = typeof ev === 'string' ? null : ev.chunk_id;
+            const sourceUrl = typeof ev === 'string' ? null : ev.source_url;
+            return (
+              <blockquote key={i} style={{ margin: '0.5rem 0', paddingLeft: '0.8rem', borderLeft: '3px solid #ddd' }}>
+                <div>{quote}</div>
+                <div style={{ color: '#666', fontSize: '0.85rem', marginTop: '0.3rem' }}>
+                  {chunkId !== null && chunkId !== undefined ? <>Chunk {chunkId}</> : <>Chunk n/a</>}
+                  {sourceUrl && (
+                    <>
+                      {' '}· <a href={sourceUrl} target="_blank" rel="noreferrer">Source doc</a>
+                    </>
+                  )}
+                </div>
+              </blockquote>
+            );
+          })}
+        </div>
+      )}
+
+      <h2 style={{ marginBottom: '0.6rem' }}>Top Entity-Theme Links</h2>
+      <div style={{ display: 'grid', gap: '0.6rem' }}>
+        {filteredTopEdges.slice(0, 50).map((edge, i) => (
+          <div key={i} style={{ border: '1px solid #eee', borderRadius: '8px', padding: '0.8rem' }}>
+            <div>
+              <Link to={`/entity/${encodeURIComponent(edge.entity_id)}`}>{edge.entity_label}</Link>
+              {' '}↔ <strong>{edge.theme}</strong>
+            </div>
+            <div style={{ color: '#666', fontSize: '0.9rem' }}>
+              Score ({edge.score_mode || scoreMode}) {edge.weight} · Raw {edge.raw_weight ?? edge.weight} · Lift {edge.lift ?? 'n/a'} · PMI {edge.pmi ?? 'n/a'} · Matches {edge.count} · {edge.entity_class}
+            </div>
+            {edge.evidence?.[0] && (
+              <div style={{ marginTop: '0.4rem', fontSize: '0.92rem' }}>
+                {(() => {
+                  const ev = edge.evidence[0];
+                  const quote = typeof ev === 'string' ? ev : ev.quote;
+                  const chunkId = typeof ev === 'string' ? null : ev.chunk_id;
+                  return (
+                    <>
+                      “{quote}”
+                      {chunkId !== null && chunkId !== undefined && (
+                        <span style={{ color: '#666' }}> (chunk {chunkId})</span>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 
 const GitHubRibbon = () => (
   <a href="https://github.com/andyed/fascist-language-analyzer" target="_blank" rel="noopener noreferrer" className="github-corner" aria-label="View source on GitHub">
@@ -480,6 +857,9 @@ const App = () => {
           <Route path="/" element={<GraphView />} />
           <Route path="/themes" element={<ThemeList />} />
           <Route path="/theme/:traitId" element={<ThemePage />} />
+          <Route path="/entities" element={<EntitiesList />} />
+          <Route path="/entity/:entityId" element={<EntityPage />} />
+          <Route path="/entity-themes" element={<EntityThemeView />} />
         </Routes>
       </div>
     </Router>
