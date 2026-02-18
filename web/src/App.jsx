@@ -466,8 +466,7 @@ const EntitiesList = () => {
     <div style={{ padding: '2rem', maxWidth: '1000px', margin: '0 auto' }}>
       <h1 style={{ marginBottom: '0.6rem' }}>Entities</h1>
       <p style={{ color: '#666' }}>
-        Browse extracted entities grouped by class. For SEO/crawlable pages, use the{' '}
-        <a href="../entities/index.html">static entity index</a>.
+        Browse extracted entities grouped by class.
       </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1rem' }}>
