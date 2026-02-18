@@ -1,0 +1,505 @@
+{
+  "version": "v2-auto",
+  "generated_from": "data/entities_langextract.normalization_report.json",
+  "top_n": 50,
+  "entries": [
+    {
+      "canonical_id": "agency.congress",
+      "canonical_label": "Congress",
+      "entity_class": "government_agency",
+      "aliases": [
+        "Congress",
+        "congress"
+      ],
+      "source_count": 438
+    },
+    {
+      "canonical_id": "location.china",
+      "canonical_label": "China",
+      "entity_class": "location",
+      "aliases": [
+        "China",
+        "china"
+      ],
+      "source_count": 188
+    },
+    {
+      "canonical_id": "agency.biden_administration",
+      "canonical_label": "Biden Administration",
+      "entity_class": "government_agency",
+      "aliases": [
+        "Biden Administration",
+        "biden administration"
+      ],
+      "source_count": 155
+    },
+    {
+      "canonical_id": "agency.trump_administration",
+      "canonical_label": "Trump Administration",
+      "entity_class": "government_agency",
+      "aliases": [
+        "Trump Administration",
+        "trump administration"
+      ],
+      "source_count": 112
+    },
+    {
+      "canonical_id": "agency.federal_government",
+      "canonical_label": "federal government",
+      "entity_class": "government_agency",
+      "aliases": [
+        "federal government"
+      ],
+      "source_count": 63
+    },
+    {
+      "canonical_id": "location.russia",
+      "canonical_label": "Russia",
+      "entity_class": "location",
+      "aliases": [
+        "Russia",
+        "russia"
+      ],
+      "source_count": 60
+    },
+    {
+      "canonical_id": "location.american",
+      "canonical_label": "American",
+      "entity_class": "location",
+      "aliases": [
+        "American",
+        "american"
+      ],
+      "source_count": 59
+    },
+    {
+      "canonical_id": "agency.senate",
+      "canonical_label": "Senate",
+      "entity_class": "government_agency",
+      "aliases": [
+        "Senate",
+        "senate"
+      ],
+      "source_count": 52
+    },
+    {
+      "canonical_id": "agency.usda",
+      "canonical_label": "USDA",
+      "entity_class": "government_agency",
+      "aliases": [
+        "USDA",
+        "usda"
+      ],
+      "source_count": 52
+    },
+    {
+      "canonical_id": "agency.doe",
+      "canonical_label": "DOE",
+      "entity_class": "government_agency",
+      "aliases": [
+        "DOE",
+        "doe"
+      ],
+      "source_count": 52
+    },
+    {
+      "canonical_id": "person.biden",
+      "canonical_label": "Biden",
+      "entity_class": "person",
+      "aliases": [
+        "Biden",
+        "biden"
+      ],
+      "source_count": 51
+    },
+    {
+      "canonical_id": "agency.ic",
+      "canonical_label": "IC",
+      "entity_class": "government_agency",
+      "aliases": [
+        "IC",
+        "ic"
+      ],
+      "source_count": 50
+    },
+    {
+      "canonical_id": "location.washington",
+      "canonical_label": "Washington",
+      "entity_class": "location",
+      "aliases": [
+        "Washington",
+        "washington"
+      ],
+      "source_count": 48
+    },
+    {
+      "canonical_id": "location.communist_china",
+      "canonical_label": "Communist China",
+      "entity_class": "location",
+      "aliases": [
+        "Communist China",
+        "communist china"
+      ],
+      "source_count": 43
+    },
+    {
+      "canonical_id": "agency.administration",
+      "canonical_label": "Administration",
+      "entity_class": "government_agency",
+      "aliases": [
+        "Administration",
+        "administration"
+      ],
+      "source_count": 39
+    },
+    {
+      "canonical_id": "agency.u_s_government",
+      "canonical_label": "U.S. government",
+      "entity_class": "government_agency",
+      "aliases": [
+        "U.S. government",
+        "u s government"
+      ],
+      "source_count": 38
+    },
+    {
+      "canonical_id": "agency.fbi",
+      "canonical_label": "FBI",
+      "entity_class": "government_agency",
+      "aliases": [
+        "FBI",
+        "fbi"
+      ],
+      "source_count": 38
+    },
+    {
+      "canonical_id": "person.trump",
+      "canonical_label": "Trump",
+      "entity_class": "person",
+      "aliases": [
+        "Trump",
+        "trump"
+      ],
+      "source_count": 35
+    },
+    {
+      "canonical_id": "organization.federal_register",
+      "canonical_label": "Federal Register",
+      "entity_class": "organization",
+      "aliases": [
+        "Federal Register",
+        "federal register"
+      ],
+      "source_count": 35
+    },
+    {
+      "canonical_id": "agency.cia",
+      "canonical_label": "CIA",
+      "entity_class": "government_agency",
+      "aliases": [
+        "CIA",
+        "cia"
+      ],
+      "source_count": 31
+    },
+    {
+      "canonical_id": "agency.sba",
+      "canonical_label": "SBA",
+      "entity_class": "government_agency",
+      "aliases": [
+        "SBA",
+        "sba"
+      ],
+      "source_count": 31
+    },
+    {
+      "canonical_id": "agency.hud",
+      "canonical_label": "HUD",
+      "entity_class": "government_agency",
+      "aliases": [
+        "HUD",
+        "hud"
+      ],
+      "source_count": 30
+    },
+    {
+      "canonical_id": "agency.exim",
+      "canonical_label": "EXIM",
+      "entity_class": "government_agency",
+      "aliases": [
+        "EXIM",
+        "exim"
+      ],
+      "source_count": 30
+    },
+    {
+      "canonical_id": "agency.treasury",
+      "canonical_label": "Treasury",
+      "entity_class": "government_agency",
+      "aliases": [
+        "Treasury",
+        "treasury"
+      ],
+      "source_count": 29
+    },
+    {
+      "canonical_id": "agency.u_s_department_of_agriculture",
+      "canonical_label": "U.S. Department of Agriculture",
+      "entity_class": "government_agency",
+      "aliases": [
+        "U.S. Department of Agriculture",
+        "u s department of agriculture"
+      ],
+      "source_count": 29
+    },
+    {
+      "canonical_id": "agency.dol",
+      "canonical_label": "DOL",
+      "entity_class": "government_agency",
+      "aliases": [
+        "DOL",
+        "dol"
+      ],
+      "source_count": 29
+    },
+    {
+      "canonical_id": "person.president_trump",
+      "canonical_label": "President Trump",
+      "entity_class": "person",
+      "aliases": [
+        "President Trump",
+        "president trump"
+      ],
+      "source_count": 28
+    },
+    {
+      "canonical_id": "agency.dni",
+      "canonical_label": "DNI",
+      "entity_class": "government_agency",
+      "aliases": [
+        "DNI",
+        "dni"
+      ],
+      "source_count": 28
+    },
+    {
+      "canonical_id": "agency.u_s_department_of_energy",
+      "canonical_label": "U.S. Department of Energy",
+      "entity_class": "government_agency",
+      "aliases": [
+        "U.S. Department of Energy",
+        "u s department of energy"
+      ],
+      "source_count": 27
+    },
+    {
+      "canonical_id": "location.beijing",
+      "canonical_label": "Beijing",
+      "entity_class": "location",
+      "aliases": [
+        "Beijing",
+        "beijing"
+      ],
+      "source_count": 27
+    },
+    {
+      "canonical_id": "location.iran",
+      "canonical_label": "Iran",
+      "entity_class": "location",
+      "aliases": [
+        "Iran",
+        "iran"
+      ],
+      "source_count": 27
+    },
+    {
+      "canonical_id": "agency.supreme_court",
+      "canonical_label": "Supreme Court",
+      "entity_class": "government_agency",
+      "aliases": [
+        "Supreme Court",
+        "supreme court"
+      ],
+      "source_count": 26
+    },
+    {
+      "canonical_id": "agency.117th_congress",
+      "canonical_label": "117th Congress",
+      "entity_class": "government_agency",
+      "aliases": [
+        "117th Congress",
+        "117th congress"
+      ],
+      "source_count": 25
+    },
+    {
+      "canonical_id": "agency.obama_administration",
+      "canonical_label": "Obama Administration",
+      "entity_class": "government_agency",
+      "aliases": [
+        "Obama Administration",
+        "obama administration"
+      ],
+      "source_count": 25
+    },
+    {
+      "canonical_id": "person.ronald_reagan",
+      "canonical_label": "Ronald Reagan",
+      "entity_class": "person",
+      "aliases": [
+        "Ronald Reagan",
+        "ronald reagan"
+      ],
+      "source_count": 24
+    },
+    {
+      "canonical_id": "agency.president",
+      "canonical_label": "President",
+      "entity_class": "government_agency",
+      "aliases": [
+        "President",
+        "president"
+      ],
+      "source_count": 24
+    },
+    {
+      "canonical_id": "location.alaska",
+      "canonical_label": "Alaska",
+      "entity_class": "location",
+      "aliases": [
+        "Alaska",
+        "alaska"
+      ],
+      "source_count": 24
+    },
+    {
+      "canonical_id": "agency.odni",
+      "canonical_label": "ODNI",
+      "entity_class": "government_agency",
+      "aliases": [
+        "ODNI",
+        "odni"
+      ],
+      "source_count": 24
+    },
+    {
+      "canonical_id": "agency.intelligence_community",
+      "canonical_label": "Intelligence Community",
+      "entity_class": "government_agency",
+      "aliases": [
+        "Intelligence Community",
+        "intelligence community"
+      ],
+      "source_count": 23
+    },
+    {
+      "canonical_id": "agency.blm",
+      "canonical_label": "BLM",
+      "entity_class": "government_agency",
+      "aliases": [
+        "BLM",
+        "blm"
+      ],
+      "source_count": 23
+    },
+    {
+      "canonical_id": "agency.ferc",
+      "canonical_label": "FERC",
+      "entity_class": "government_agency",
+      "aliases": [
+        "FERC",
+        "ferc"
+      ],
+      "source_count": 22
+    },
+    {
+      "canonical_id": "agency.cms",
+      "canonical_label": "CMS",
+      "entity_class": "government_agency",
+      "aliases": [
+        "CMS",
+        "cms"
+      ],
+      "source_count": 22
+    },
+    {
+      "canonical_id": "agency.doi",
+      "canonical_label": "DOI",
+      "entity_class": "government_agency",
+      "aliases": [
+        "DOI",
+        "doi"
+      ],
+      "source_count": 22
+    },
+    {
+      "canonical_id": "agency.office_of_the_secretary",
+      "canonical_label": "Office of the Secretary",
+      "entity_class": "government_agency",
+      "aliases": [
+        "Office of the Secretary",
+        "office of the secretary"
+      ],
+      "source_count": 21
+    },
+    {
+      "canonical_id": "location.washington_d_c",
+      "canonical_label": "Washington, D.C.",
+      "entity_class": "location",
+      "aliases": [
+        "Washington, D.C.",
+        "washington d c"
+      ],
+      "source_count": 21
+    },
+    {
+      "canonical_id": "agency.executive_branch",
+      "canonical_label": "executive branch",
+      "entity_class": "government_agency",
+      "aliases": [
+        "executive branch"
+      ],
+      "source_count": 21
+    },
+    {
+      "canonical_id": "location.chinese",
+      "canonical_label": "Chinese",
+      "entity_class": "location",
+      "aliases": [
+        "Chinese",
+        "chinese"
+      ],
+      "source_count": 21
+    },
+    {
+      "canonical_id": "person.president",
+      "canonical_label": "President",
+      "entity_class": "person",
+      "aliases": [
+        "President",
+        "president"
+      ],
+      "source_count": 20
+    },
+    {
+      "canonical_id": "person.donald_j_trump",
+      "canonical_label": "Donald J. Trump",
+      "entity_class": "person",
+      "aliases": [
+        "Donald J. Trump",
+        "donald j trump"
+      ],
+      "source_count": 20
+    },
+    {
+      "canonical_id": "agency.department_of_commerce",
+      "canonical_label": "Department of Commerce",
+      "entity_class": "government_agency",
+      "aliases": [
+        "Department of Commerce",
+        "department of commerce"
+      ],
+      "source_count": 20
+    }
+  ]
+}
