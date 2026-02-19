@@ -568,11 +568,24 @@ const EntityPage = () => {
         Showing {entity.snippets?.length || 0} context snippets for {entity.count} total mentions.
       </p>
 
-      {(entity.snippets || []).map((snippet, i) => (
+      {(entity.snippets || []).map((snippet, i) => {
+        const snippetText = typeof snippet === 'string' ? snippet : (snippet?.text || '');
+        const snippetSource = typeof snippet === 'object' ? snippet?.source_url : undefined;
+        const snippetPage = typeof snippet === 'object' ? snippet?.estimated_page : undefined;
+
+        return (
         <div key={i} style={{ background: '#f9f9f9', borderLeft: '4px solid #ccc', padding: '1rem', marginBottom: '0.7rem' }}>
-          {highlightMentions(snippet, entity.mention_samples || [])}
+          {highlightMentions(snippetText, entity.mention_samples || [])}
+          {snippetSource && (
+            <div style={{ marginTop: '0.5rem' }}>
+              <a href={snippetSource} target="_blank" rel="noreferrer">
+                Source{snippetPage ? ` (est. p.${snippetPage})` : ''}
+              </a>
+            </div>
+          )}
         </div>
-      ))}
+        );
+      })}
 
       <p>
         <a href={`../entities/${entity.entity_class.replaceAll('_', '-')}.html`}>Open grouped static page</a>

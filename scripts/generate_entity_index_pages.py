@@ -1,4 +1,5 @@
 import argparse
+import bisect
 import json
 import os
 import re
@@ -14,6 +15,7 @@ DEFAULT_WEB_DATA = "web/public/entities_data.json"
 DEFAULT_MAX_SNIPPETS = 0
 DEFAULT_MAX_ENTITIES_PER_CLASS = 50
 DEFAULT_SNIPPET_CONTEXT_CHARS = 180
+DEFAULT_SOURCE_DOC_URL = "https://www.project2025.observer/en"
 SENTENCE_SCAN_LIMIT = 260
 
 CLASS_ORDER = [
@@ -61,6 +63,11 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=DEFAULT_SNIPPET_CONTEXT_CHARS,
         help="Characters of left/right context around each extracted mention",
+    )
+    parser.add_argument(
+        "--source-doc-url",
+        default=DEFAULT_SOURCE_DOC_URL,
+        help="Canonical source document URL used for quote/source links",
     )
     return parser.parse_args()
 
@@ -199,8 +206,51 @@ def load_text(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="ignore")
 
 
+def clean_source_for_offsets(raw_text: str) -> str:
+    text = re.sub(r"\n\s*--- PAGE BREAK ---\s*\n", "\n", raw_text)
+    text = re.sub(r"\bPAGE\s+BREAK\b", "", text)
+    return text
+
+
+def build_page_index(raw_text: str) -> tuple[list[int], list[int]]:
+    marker = re.compile(r"\n\s*--- PAGE BREAK ---\s*\n")
+    pages = re.split(marker, raw_text)
+
+    starts: list[int] = []
+    page_numbers: list[int] = []
+    cursor = 0
+    total_pages = len(pages)
+
+    for idx, page_text in enumerate(pages, start=1):
+        cleaned_page = re.sub(r"\bPAGE\s+BREAK\b", "", page_text)
+        starts.append(cursor)
+        page_numbers.append(idx)
+        cursor += len(cleaned_page)
+        if idx < total_pages:
+            cursor += 1
+
+    return starts, page_numbers
+
+
+def estimate_page_for_offset(offset: int | None, page_starts: list[int], page_numbers: list[int]) -> int | None:
+    if offset is None or not page_starts:
+        return None
+    pos = bisect.bisect_right(page_starts, offset) - 1
+    if pos < 0:
+        return page_numbers[0]
+    if pos >= len(page_numbers):
+        return page_numbers[-1]
+    return page_numbers[pos]
+
+
 def build_entity_records(
-    extractions: list[dict], raw_text: str, max_snippets: int, snippet_context_chars: int
+    extractions: list[dict],
+    cleaned_text: str,
+    page_starts: list[int],
+    page_numbers: list[int],
+    source_doc_url: str,
+    max_snippets: int,
+    snippet_context_chars: int,
 ) -> dict:
     entities: dict[str, dict] = {}
 
@@ -232,6 +282,7 @@ def build_entity_records(
                 "first_pos": start if isinstance(start, int) else None,
                 "last_pos": end if isinstance(end, int) else None,
                 "mentions": Counter(),
+                "page_counts": Counter(),
                 "snippets": [],
             }
             entities[entity_id] = rec
@@ -243,6 +294,9 @@ def build_entity_records(
             rec["mentions"][mention] += 1
 
         if isinstance(start, int):
+            page = estimate_page_for_offset(start, page_starts, page_numbers)
+            if page is not None:
+                rec["page_counts"][page] += 1
             if rec["first_pos"] is None or start < rec["first_pos"]:
                 rec["first_pos"] = start
         if isinstance(end, int):
@@ -252,20 +306,30 @@ def build_entity_records(
         snippet_unlimited = max_snippets <= 0
         can_add_snippet = snippet_unlimited or len(rec["snippets"]) < max_snippets
 
-        if raw_text and isinstance(start, int) and isinstance(end, int) and can_add_snippet:
+        if cleaned_text and isinstance(start, int) and isinstance(end, int) and can_add_snippet:
             left = max(0, start - snippet_context_chars)
-            right = min(len(raw_text), end + snippet_context_chars)
+            right = min(len(cleaned_text), end + snippet_context_chars)
             left, right = maybe_sentence_aligned_bounds(
-                raw_text,
+                cleaned_text,
                 start,
                 end,
                 left,
                 right,
                 min_length=max(140, snippet_context_chars),
             )
-            snippet = canonicalize_whitespace(raw_text[left:right])
-            if snippet and (snippet_unlimited or snippet not in rec["snippets"]):
-                rec["snippets"].append(snippet)
+            snippet = canonicalize_whitespace(cleaned_text[left:right])
+            page = estimate_page_for_offset(start, page_starts, page_numbers)
+            snippet_obj = {
+                "text": snippet,
+                "char_start": start,
+                "estimated_page": page,
+                "source_url": source_doc_url,
+            }
+            if snippet and (
+                snippet_unlimited
+                or snippet not in [s.get("text", "") if isinstance(s, dict) else s for s in rec["snippets"]]
+            ):
+                rec["snippets"].append(snippet_obj)
 
     classes = defaultdict(list)
     for entity in entities.values():
@@ -284,6 +348,7 @@ def build_entity_records(
             "normalized_rate_percent": normalized_rate,
             "first_pos": entity["first_pos"],
             "last_pos": entity["last_pos"],
+            "top_estimated_pages": [p for p, _ in entity["page_counts"].most_common(3)],
             "mention_samples": mention_samples,
             "snippets": entity["snippets"],
         }
@@ -390,11 +455,22 @@ def write_class_pages(docs_dir: Path, grouped: dict[str, list[dict]], max_entiti
                 mentions = "".join([f"<span class=\"chip\">{escape_html(m)}</span>" for m in entity["mention_samples"]])
                 snippet_html = ""
                 if entity["snippets"]:
+                    snippet_record = entity["snippets"][0]
+                    snippet_text = snippet_record.get("text", "") if isinstance(snippet_record, dict) else str(snippet_record)
                     snippet_highlighted = highlight_terms_html(
-                        entity["snippets"][0],
+                        snippet_text,
                         entity.get("mention_samples", []),
                     )
-                    snippet_html = f"<p class=\"muted\">Example: {snippet_highlighted}</p>"
+                    page_label = ""
+                    source_link = ""
+                    if isinstance(snippet_record, dict):
+                        page = snippet_record.get("estimated_page")
+                        src = snippet_record.get("source_url")
+                        if page:
+                            page_label = f" (est. p.{page})"
+                        if src:
+                            source_link = f" · <a href=\"{escape_html(src)}\" target=\"_blank\" rel=\"noreferrer\">Source{page_label}</a>"
+                    snippet_html = f"<p class=\"muted\">Example: {snippet_highlighted}{source_link}</p>"
                 entity_href = quote(entity["id"], safe="")
 
                 cards.append(
@@ -464,9 +540,14 @@ def main() -> None:
 
     extractions = load_extractions(input_path, fallback_path)
     raw_text = load_text(raw_text_path)
+    cleaned_text = clean_source_for_offsets(raw_text)
+    page_starts, page_numbers = build_page_index(raw_text)
     grouped = build_entity_records(
         extractions,
-        raw_text,
+        cleaned_text,
+        page_starts,
+        page_numbers,
+        source_doc_url=args.source_doc_url,
         max_snippets=args.max_snippets,
         snippet_context_chars=args.snippet_context_chars,
     )

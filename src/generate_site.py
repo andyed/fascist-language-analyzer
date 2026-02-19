@@ -1,10 +1,14 @@
 import argparse
 import json
 import os
+import re
 
 INPUT_FILE = "data/analysis_results.json"
+SOURCE_TEXT_FILE = "data/project_2025.txt"
+SOURCE_DOC_URL = "https://www.project2025.observer/en"
 OUTPUT_DIR = "docs"
 THEMES_DIR = os.path.join(OUTPUT_DIR, "themes")
+CHUNKS_DIR = os.path.join(OUTPUT_DIR, "chunks")
 DEFAULT_MAX_ITEMS_PER_THEME = 50
 
 TRAIT_COLORS = {
@@ -30,6 +34,13 @@ def load_data():
     with open(INPUT_FILE, "r") as f:
         return json.load(f)
 
+
+def load_source_text(path=SOURCE_TEXT_FILE):
+    if not os.path.exists(path):
+        return ""
+    with open(path, "r", encoding="utf-8", errors="ignore") as f:
+        return f.read()
+
 def slugify(text):
     return text.lower().replace(" ", "-").replace("'", "")
 
@@ -42,7 +53,86 @@ def parse_args():
         default=DEFAULT_MAX_ITEMS_PER_THEME,
         help="Max quote cards per theme page (0 means no cap)",
     )
+    parser.add_argument(
+        "--source-doc-url",
+        default=SOURCE_DOC_URL,
+        help="Canonical source document URL used for source links",
+    )
     return parser.parse_args()
+
+
+def clean_source_for_offsets(raw_text):
+    text = re.sub(r"\n\s*--- PAGE BREAK ---\s*\n", "\n", raw_text)
+    text = re.sub(r"\bPAGE\s+BREAK\b", "", text)
+    return text
+
+
+def build_page_index(raw_text):
+    marker = re.compile(r"\n\s*--- PAGE BREAK ---\s*\n")
+    pages = re.split(marker, raw_text)
+
+    starts = []
+    cursor = 0
+    total_pages = len(pages)
+    for idx, page_text in enumerate(pages, start=1):
+        cleaned_page = re.sub(r"\bPAGE\s+BREAK\b", "", page_text)
+        starts.append((cursor, idx))
+        cursor += len(cleaned_page)
+        if idx < total_pages:
+            cursor += 1
+
+    return starts
+
+
+def estimate_page_for_offset(offset, page_starts):
+    if offset is None or not page_starts:
+        return None
+
+    low = 0
+    high = len(page_starts) - 1
+    while low <= high:
+        mid = (low + high) // 2
+        if page_starts[mid][0] <= offset:
+            low = mid + 1
+        else:
+            high = mid - 1
+
+    if high < 0:
+        return page_starts[0][1]
+    return page_starts[high][1]
+
+
+def normalize_search_text(text):
+    return re.sub(r"\s+", " ", (text or "")).strip()
+
+
+def estimate_chunk_pages(data, cleaned_source, page_starts):
+    chunk_to_page = {}
+    cursor = 0
+
+    for chunk in data:
+        chunk_id = chunk.get("chunk_id")
+        candidates = [chunk.get("source_text", "")]
+        for concept in chunk.get("concepts", [])[:3]:
+            candidates.append(concept.get("quote", ""))
+
+        found_offset = None
+        for candidate in candidates:
+            normalized = normalize_search_text(candidate)
+            if len(normalized) < 30:
+                continue
+            probe = normalized[:140]
+            found = cleaned_source.find(probe, cursor)
+            if found < 0:
+                found = cleaned_source.find(probe)
+            if found >= 0:
+                found_offset = found
+                cursor = found + len(probe)
+                break
+
+        chunk_to_page[chunk_id] = estimate_page_for_offset(found_offset, page_starts)
+
+    return chunk_to_page
 
 def generate_header(title, depth=0):
     root = "../" * depth
@@ -134,7 +224,53 @@ def generate_about_themes():
     with open(os.path.join(OUTPUT_DIR, "themes_explained.html"), "w") as f:
         f.write(html)
 
-def generate_theme_pages(data, max_items_per_theme):
+
+def generate_chunk_pages(data, chunk_to_page, source_doc_url):
+    os.makedirs(CHUNKS_DIR, exist_ok=True)
+
+    for chunk in data:
+        chunk_id = chunk.get("chunk_id")
+        concepts = chunk.get("concepts", [])
+        unique_traits = list(dict.fromkeys([c.get("trait") for c in concepts if c.get("trait")]))
+        est_page = chunk_to_page.get(chunk_id)
+
+        html = generate_header(f"Chunk {chunk_id}", depth=1)
+        if est_page:
+            html += f"<p><strong>Estimated source page:</strong> {est_page} · <a href=\"{source_doc_url}\" target=\"_blank\" rel=\"noreferrer\">Open source</a></p>"
+        else:
+            html += f"<p><a href=\"{source_doc_url}\" target=\"_blank\" rel=\"noreferrer\">Open source document</a></p>"
+
+        if unique_traits:
+            trait_links = " · ".join(
+                [f"<a href=\"../themes/{slugify(t)}.html\">{t}</a>" for t in unique_traits]
+            )
+            html += f"<p><strong>Linked themes:</strong> {trait_links}</p>"
+
+        source_text = chunk.get("source_text")
+        if source_text:
+            html += f"<div class=\"quote-card\"><blockquote>\"{source_text[:1200]}\"</blockquote></div>"
+
+        for concept in concepts:
+            trait = concept.get("trait", "Unknown")
+            color = TRAIT_COLORS.get(trait, "#ccc")
+            quote = concept.get("quote", "")
+            explanation = concept.get("explanation", "")
+            conf = concept.get("confidence", "")
+            html += f"""
+            <div class=\"quote-card\" style=\"border-left-color: {color}\">
+                <p><strong>Theme:</strong> <a href=\"../themes/{slugify(trait)}.html\">{trait}</a></p>
+                <blockquote>\"{quote}\"</blockquote>
+                <p>{explanation}</p>
+                <small>Confidence: {conf}</small>
+            </div>
+            """
+
+        html += generate_footer()
+        with open(os.path.join(CHUNKS_DIR, f"chunk-{chunk_id}.html"), "w") as f:
+            f.write(html)
+
+
+def generate_theme_pages(data, max_items_per_theme, chunk_to_page, source_doc_url):
     os.makedirs(THEMES_DIR, exist_ok=True)
     
     # Group by trait
@@ -146,6 +282,7 @@ def generate_theme_pages(data, max_items_per_theme):
             if t in traits:
                 payload = concept.copy()
                 payload["chunk_id"] = chunk["chunk_id"]
+                payload["estimated_page"] = chunk_to_page.get(chunk["chunk_id"])
                 traits[t].append(payload)
 
     # Generate index of themes
@@ -172,7 +309,11 @@ def generate_theme_pages(data, max_items_per_theme):
             <div class="quote-card" style="border-left-color: {color}">
                 <blockquote>"{item['quote']}"</blockquote>
                 <p>{item['explanation']}</p>
-                <small>Confidence: {item['confidence']} | <a href="../index.html#chunk-{item['chunk_id']}">Chunk {item['chunk_id']}</a></small>
+                <small>
+                    Confidence: {item['confidence']} |
+                    <a href="../chunks/chunk-{item['chunk_id']}.html">Chunk {item['chunk_id']}</a>
+                    {f" | <a href='{source_doc_url}' target='_blank' rel='noreferrer'>Source (est. p.{item['estimated_page']})</a>" if item.get('estimated_page') else ""}
+                </small>
             </div>
             """
             
@@ -228,8 +369,16 @@ def main():
         print("No data found!")
         return
 
+    source_text = load_source_text(SOURCE_TEXT_FILE)
+    cleaned_source = clean_source_for_offsets(source_text) if source_text else ""
+    page_starts = build_page_index(source_text) if source_text else []
+    chunk_to_page = estimate_chunk_pages(data, cleaned_source, page_starts) if source_text else {}
+
+    print("Generating Chunk Pages...")
+    generate_chunk_pages(data, chunk_to_page, args.source_doc_url)
+
     print("Generating Theme Pages...")
-    themes_list = generate_theme_pages(data, args.max_items_per_theme)
+    themes_list = generate_theme_pages(data, args.max_items_per_theme, chunk_to_page, args.source_doc_url)
     
     print("Generating Themes Explanation...")
     generate_about_themes()
