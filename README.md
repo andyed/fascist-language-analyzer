@@ -1,10 +1,10 @@
 # Fascist Language Analyzer — Chapter 2 (LangExtract Deep Dive)
 
-Chapter 1 is preserved in `README_chapter1.md`.
+Chapter 1 is preserved in `README_chapter1.md` and captures the original trait-first analysis pass over Project 2025 using LangChain.
 
-This Chapter 2 README reframes the project around the entity extraction stack (`langextract`) and how it connects back to the Ur-Fascism rhetorical analysis.
+This Chapter 2 README reframes the project around the entity extraction stack (`langextract`) and explains how entities connect back to the Chapter 1 Ur-Fascism rhetorical analysis.
 
-## Chapter 1 Snapshot (Concise)
+## Chapter 1 Snapshot
 
 - **Conclusion:** The strongest rhetorical pattern in this corpus concentrates around Selective Populism and Obsession-with-a-Plot dynamics, with institutional actors frequently linked to those frames.
 - **LangChain:** Chapter 1 used schema-constrained LangChain analysis to classify quote-level evidence into Eco’s 14 Ur-Fascism properties with confidence scoring.
@@ -12,9 +12,11 @@ This Chapter 2 README reframes the project around the entity extraction stack (`
 - **Entity ↔ Theme Bridge:** The current release links entities to theme-bearing passages with evidence, chunk provenance, and optional normalized scoring (`raw`, `lift`, `pmi`).
 - **Full Chapter 1:** The long-form narrative, methodology, and original framing remain in `README_chapter1.md`.
 
+![Chapter 1 Trait Network](docs/images/trait_network.png)
+
 ## Table of Contents
 
-- [Chapter 1 Snapshot (Concise)](#chapter-1-snapshot-concise)
+- [Chapter 1 Snapshot](#chapter-1-snapshot)
 - [Open the Web App](#open-the-web-app)
 - [Web App Functions](#web-app-functions)
 - [What Chapter 2 Covers](#what-chapter-2-covers)
