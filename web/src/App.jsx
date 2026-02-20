@@ -33,6 +33,51 @@ const Nav = () => (
   </nav>
 );
 
+const canonicalSpace = (text) => (text || '').replace(/\s+/g, ' ').trim();
+
+const buildTextFragment = (text) => {
+  const normalized = canonicalSpace(text);
+  if (!normalized) return '';
+  const words = normalized.split(' ').filter(Boolean);
+  const probe = words.slice(0, 8).join(' ');
+  return `#:~:text=${encodeURIComponent(probe)}`;
+};
+
+const buildLocalSourceUrl = (text) => {
+  const base = import.meta?.env?.BASE_URL || '/';
+  const fragment = buildTextFragment(text);
+  return `${base}source/p2025-1.html${fragment}`;
+};
+
+const SOURCE_PAGES_PER_HTML = 25;
+
+let chunkPagesCache = null;
+let chunkPagesPromise = null;
+
+const loadChunkPages = () => {
+  if (chunkPagesCache) return Promise.resolve(chunkPagesCache);
+  if (chunkPagesPromise) return chunkPagesPromise;
+
+  // Prefer a relative fetch; with Vite `base: './'` this resolves under /graph/ on GH Pages.
+  chunkPagesPromise = fetch('./chunk_pages.json')
+    .then((res) => (res.ok ? res.json() : {}))
+    .catch(() => ({}))
+    .then((data) => {
+      chunkPagesCache = data || {};
+      return chunkPagesCache;
+    });
+
+  return chunkPagesPromise;
+};
+
+const buildLocalSourceUrlForPage = (page, text) => {
+  const base = import.meta?.env?.BASE_URL || '/';
+  const fragment = buildTextFragment(text);
+  const p = Number.isFinite(Number(page)) ? Number(page) : null;
+  const group = p && p > 0 ? Math.floor((p - 1) / SOURCE_PAGES_PER_HTML) + 1 : 1;
+  return `${base}source/p2025-${group}.html${fragment}`;
+};
+
 const Sparkline = ({ counts, color }) => {
   // Simple SVG sparkline
   const height = 30;
@@ -412,6 +457,7 @@ const ThemePage = () => {
   const { traitId } = useParams();
   const decodedTrait = decodeURIComponent(traitId);
   const [quotes, setQuotes] = useState([]);
+  const [chunkPages, setChunkPages] = useState(null);
 
   useEffect(() => {
     fetch('./data.json')
@@ -429,6 +475,10 @@ const ThemePage = () => {
       });
   }, [decodedTrait]);
 
+  useEffect(() => {
+    loadChunkPages().then(setChunkPages);
+  }, []);
+
   const color = TRAIT_COLORS[decodedTrait] || '#eee';
 
   return (
@@ -445,6 +495,7 @@ const ThemePage = () => {
           <p>{q.explanation}</p>
           <div style={{ fontSize: '0.8rem', color: '#666' }}>
             Confidence: {q.confidence} | Chunk: {q.chunk_id}
+            {' '}| <a href={buildLocalSourceUrlForPage(chunkPages?.[String(q.chunk_id)], q.quote)} target="_blank" rel="noreferrer">Source</a>
           </div>
         </div>
       ))}
@@ -456,7 +507,7 @@ const EntitiesList = () => {
   const [entityData, setEntityData] = useState({ entity_classes: [], classes: {} });
 
   useEffect(() => {
-    fetch('./entities_data.json')
+    fetch('./entity_theme_data.json')
       .then(res => res.json())
       .then(setEntityData)
       .catch(() => setEntityData({ entity_classes: [], classes: {} }));
@@ -572,13 +623,14 @@ const EntityPage = () => {
         const snippetText = typeof snippet === 'string' ? snippet : (snippet?.text || '');
         const snippetSource = typeof snippet === 'object' ? snippet?.source_url : undefined;
         const snippetPage = typeof snippet === 'object' ? snippet?.estimated_page : undefined;
+        const localSnippetSource = buildLocalSourceUrlForPage(snippetPage, snippetText);
 
         return (
         <div key={i} style={{ background: '#f9f9f9', borderLeft: '4px solid #ccc', padding: '1rem', marginBottom: '0.7rem' }}>
           {highlightMentions(snippetText, entity.mention_samples || [])}
-          {snippetSource && (
+          {(snippetSource || snippetText) && (
             <div style={{ marginTop: '0.5rem' }}>
-              <a href={snippetSource} target="_blank" rel="noreferrer">
+              <a href={localSnippetSource} target="_blank" rel="noreferrer">
                 Source{snippetPage ? ` (est. p.${snippetPage})` : ''}
               </a>
             </div>
@@ -597,6 +649,7 @@ const EntityPage = () => {
 const EntityThemeView = () => {
   const [data, setData] = useState(null);
   const [selected, setSelected] = useState(null);
+  const [chunkPages, setChunkPages] = useState(null);
   const [minWeight, setMinWeight] = useState(2.5);
   const [maxLinks, setMaxLinks] = useState(140);
   const [hoveredNodeId, setHoveredNodeId] = useState(null);
@@ -786,16 +839,16 @@ const EntityThemeView = () => {
             const quote = typeof ev === 'string' ? ev : ev.quote;
             const chunkId = typeof ev === 'string' ? null : ev.chunk_id;
             const sourceUrl = typeof ev === 'string' ? null : ev.source_url;
+            const localEvidenceSource = buildLocalSourceUrlForPage(
+              chunkId !== null && chunkId !== undefined ? chunkPages?.[String(chunkId)] : null,
+              quote
+            );
             return (
               <blockquote key={i} style={{ margin: '0.5rem 0', paddingLeft: '0.8rem', borderLeft: '3px solid #ddd' }}>
                 <div>{quote}</div>
                 <div style={{ color: '#666', fontSize: '0.85rem', marginTop: '0.3rem' }}>
                   {chunkId !== null && chunkId !== undefined ? <>Chunk {chunkId}</> : <>Chunk n/a</>}
-                  {sourceUrl && (
-                    <>
-                      {' '}· <a href={sourceUrl} target="_blank" rel="noreferrer">Source doc</a>
-                    </>
-                  )}
+                  <> · <a href={localEvidenceSource} target="_blank" rel="noreferrer">Source doc</a></>
                 </div>
               </blockquote>
             );

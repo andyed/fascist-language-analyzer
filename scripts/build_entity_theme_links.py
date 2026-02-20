@@ -4,11 +4,14 @@ import math
 import re
 from collections import Counter, defaultdict
 from pathlib import Path
+from urllib.parse import quote
 
 DEFAULT_ANALYSIS = "data/analysis_results.json"
 DEFAULT_ENTITIES = "web/public/entities_data.json"
 DEFAULT_OUTPUT = "web/public/entity_theme_data.json"
+DEFAULT_DOCS_GRAPH_OUTPUT = "docs/graph/entity_theme_data.json"
 DEFAULT_SOURCE_DOC_URL = "https://www.project2025.observer/en"
+DEFAULT_SOURCE_PAGES_PER_HTML = 25
 
 
 def parse_args() -> argparse.Namespace:
@@ -19,6 +22,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--entities", default=DEFAULT_ENTITIES, help="Entity data JSON path")
     parser.add_argument("--output", default=DEFAULT_OUTPUT, help="Output JSON path")
     parser.add_argument(
+        "--docs-graph-output",
+        default=DEFAULT_DOCS_GRAPH_OUTPUT,
+        help="Output JSON path for the deployed docs/graph app",
+    )
+    parser.add_argument(
         "--score-mode",
         choices=["raw", "lift", "pmi"],
         default="raw",
@@ -28,6 +36,12 @@ def parse_args() -> argparse.Namespace:
         "--source-doc-url",
         default=DEFAULT_SOURCE_DOC_URL,
         help="Canonical source document URL to include with evidence",
+    )
+    parser.add_argument(
+        "--source-pages-per-html",
+        type=int,
+        default=DEFAULT_SOURCE_PAGES_PER_HTML,
+        help="Must match generate_site.py splitting; used for local source URLs",
     )
     parser.add_argument(
         "--max-entities",
@@ -52,6 +66,23 @@ def parse_args() -> argparse.Namespace:
 
 def canonical_space(text: str) -> str:
     return re.sub(r"\s+", " ", (text or "")).strip()
+
+
+def build_text_fragment(text: str) -> str:
+    normalized = canonical_space(text)
+    if not normalized:
+        return ""
+    words = normalized.split(" ")
+    probe = " ".join([w for w in words if w][:8])
+    return "#:~:text=" + quote(probe, safe="")
+
+
+def build_local_source_url(quote_text: str, source_pages_per_html: int) -> str:
+    # We don't have offsets here, so default to the first local source page.
+    pages_per_html = max(1, int(source_pages_per_html))
+    filename = "p2025-1.html" if pages_per_html else "p2025-1.html"
+    fragment = build_text_fragment(quote_text)
+    return f"../source/{filename}{fragment}"
 
 
 def normalize_phrase(text: str) -> str:
@@ -114,6 +145,7 @@ def main() -> None:
     analysis_path = Path(args.analysis)
     entities_path = Path(args.entities)
     output_path = Path(args.output)
+    docs_graph_output_path = Path(args.docs_graph_output)
 
     if not analysis_path.exists():
         raise FileNotFoundError(f"Analysis file not found: {analysis_path}")
@@ -165,11 +197,12 @@ def main() -> None:
                 rec["raw_weight"] += confidence
                 rec["count"] += 1
                 if quote and len(rec["evidence"]) < args.max_evidence:
+                    local_source = build_local_source_url(quote, args.source_pages_per_html)
                     candidate = {
                         "quote": quote,
                         "chunk_id": chunk_id,
                         "confidence": round(confidence, 3),
-                        "source_url": args.source_doc_url,
+                        "source_url": local_source or args.source_doc_url,
                     }
                     if candidate not in rec["evidence"]:
                         rec["evidence"].append(candidate)
@@ -288,10 +321,12 @@ def main() -> None:
         "graph": {"nodes": graph_nodes, "links": graph_links},
     }
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(output, indent=2), encoding="utf-8")
+    for path in (output_path, docs_graph_output_path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(output, indent=2), encoding="utf-8")
 
     print(f"Wrote {output_path}")
+    print(f"Wrote {docs_graph_output_path}")
     print(f"Entities considered: {len(entities)}")
     print(f"Links kept: {len(links)}")
 

@@ -12,10 +12,12 @@ DEFAULT_FALLBACK_INPUT = "data/entities_langextract.normalized.jsonl"
 DEFAULT_TEXT = "data/project_2025.txt"
 DEFAULT_DOCS_DIR = "docs/entities"
 DEFAULT_WEB_DATA = "web/public/entities_data.json"
+DEFAULT_DOCS_GRAPH_DATA = "docs/graph/entities_data.json"
 DEFAULT_MAX_SNIPPETS = 0
 DEFAULT_MAX_ENTITIES_PER_CLASS = 50
 DEFAULT_SNIPPET_CONTEXT_CHARS = 180
 DEFAULT_SOURCE_DOC_URL = "https://www.project2025.observer/en"
+DEFAULT_SOURCE_PAGES_PER_HTML = 25
 SENTENCE_SCAN_LIMIT = 260
 
 CLASS_ORDER = [
@@ -47,6 +49,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--docs-dir", default=DEFAULT_DOCS_DIR, help="Output directory for static entity HTML")
     parser.add_argument("--web-data", default=DEFAULT_WEB_DATA, help="Output JSON path for Vite app")
     parser.add_argument(
+        "--docs-graph-data",
+        default=DEFAULT_DOCS_GRAPH_DATA,
+        help="Output JSON path for the deployed docs/graph app",
+    )
+    parser.add_argument(
         "--max-entities-per-class",
         type=int,
         default=DEFAULT_MAX_ENTITIES_PER_CLASS,
@@ -69,11 +76,48 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_SOURCE_DOC_URL,
         help="Canonical source document URL used for quote/source links",
     )
+    parser.add_argument(
+        "--source-pages-per-html",
+        type=int,
+        default=DEFAULT_SOURCE_PAGES_PER_HTML,
+        help="Must match source splitting; used for local source URLs",
+    )
     return parser.parse_args()
 
 
 def canonicalize_whitespace(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
+
+
+def build_text_fragment(text: str) -> str:
+    normalized = canonicalize_whitespace(text or "")
+    if not normalized:
+        return ""
+    words = normalized.split(" ")
+    probe = " ".join([w for w in words if w][:8])
+    return "#:~:text=" + quote(probe, safe="")
+
+
+def source_html_filename_for_page(page: int | None, pages_per_html: int) -> str:
+    if not page:
+        return "p2025-1.html"
+    per_file = max(1, int(pages_per_html))
+    group = (max(1, int(page)) - 1) // per_file + 1
+    return f"p2025-{group}.html"
+
+
+def build_local_source_url(page: int | None, snippet_text: str, pages_per_html: int, depth: int) -> str:
+    root = "../" * depth
+    filename = source_html_filename_for_page(page, pages_per_html)
+    fragment = build_text_fragment(snippet_text)
+    return f"{root}source/{filename}{fragment}"
+
+
+def build_app_source_url(page: int | None, snippet_text: str, pages_per_html: int) -> str:
+    # For the SPA (served at site root), use a relative path that stays within the repo base.
+    filename = source_html_filename_for_page(page, pages_per_html)
+    fragment = build_text_fragment(snippet_text)
+    return f"source/{filename}{fragment}"
 
 
 def slugify(value: str) -> str:
@@ -249,6 +293,7 @@ def build_entity_records(
     page_starts: list[int],
     page_numbers: list[int],
     source_doc_url: str,
+    source_pages_per_html: int,
     max_snippets: int,
     snippet_context_chars: int,
 ) -> dict:
@@ -319,11 +364,12 @@ def build_entity_records(
             )
             snippet = canonicalize_whitespace(cleaned_text[left:right])
             page = estimate_page_for_offset(start, page_starts, page_numbers)
+            app_source = build_app_source_url(page, snippet, pages_per_html=source_pages_per_html)
             snippet_obj = {
                 "text": snippet,
                 "char_start": start,
                 "estimated_page": page,
-                "source_url": source_doc_url,
+                "source_url": app_source or source_doc_url,
             }
             if snippet and (
                 snippet_unlimited
@@ -469,6 +515,8 @@ def write_class_pages(docs_dir: Path, grouped: dict[str, list[dict]], max_entiti
                         if page:
                             page_label = f" (est. p.{page})"
                         if src:
+                            if not src.startswith("http") and not src.startswith("../"):
+                                src = "../" + src
                             source_link = f" · <a href=\"{escape_html(src)}\" target=\"_blank\" rel=\"noreferrer\">Source{page_label}</a>"
                     snippet_html = f"<p class=\"muted\">Example: {snippet_highlighted}{source_link}</p>"
                 entity_href = quote(entity["id"], safe="")
@@ -537,6 +585,7 @@ def main() -> None:
     raw_text_path = Path(args.text)
     docs_dir = Path(args.docs_dir)
     web_data_path = Path(args.web_data)
+    docs_graph_data_path = Path(args.docs_graph_data)
 
     extractions = load_extractions(input_path, fallback_path)
     raw_text = load_text(raw_text_path)
@@ -548,6 +597,7 @@ def main() -> None:
         page_starts,
         page_numbers,
         source_doc_url=args.source_doc_url,
+        source_pages_per_html=args.source_pages_per_html,
         max_snippets=args.max_snippets,
         snippet_context_chars=args.snippet_context_chars,
     )
@@ -556,9 +606,11 @@ def main() -> None:
     write_index_page(docs_dir, grouped)
     write_class_pages(docs_dir, grouped, max_entities_per_class=args.max_entities_per_class)
     write_web_data(web_data_path, grouped)
+    write_web_data(docs_graph_data_path, grouped)
 
     print(f"Generated static entity pages in: {docs_dir}")
     print(f"Generated Vite entity data: {web_data_path}")
+    print(f"Generated docs/graph entity data: {docs_graph_data_path}")
     print(f"Class pages: {len([p for p in docs_dir.glob('*.html') if p.name != 'index.html'])}")
 
 
