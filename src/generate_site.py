@@ -457,10 +457,15 @@ def generate_landing(themes_list, data):
     html += """
     <h2>Overview</h2>
     <p>This project uses <strong>LangChain</strong> and <strong>Gemini-3-Flash</strong> to analyze the text of Project 2025, mapping it against Umberto Eco's 14 properties of Ur-Fascism.</p>
+    <script>
+      if (window.location.hash && window.location.hash.startsWith('#/')) {
+        window.location.replace('graph/index.html' + window.location.hash);
+      }
+    </script>
     
     <div style="text-align: center; margin-bottom: 2rem;">
         <a href="themes_explained.html" style="display: inline-block; padding: 0.5rem 1rem; background: #eee; color: #333; border-radius: 4px; border: 1px solid #ccc; margin-right: 1rem;">Read about the 14 Themes (Eco)</a>
-        <a href="https://www.project2025.observer/en" style="display: inline-block; padding: 0.5rem 1rem; background: #eee; color: #333; border-radius: 4px; border: 1px solid #ccc;">Read the Original Text (External)</a>
+        <a href="source/p2025-1.html" style="display: inline-block; padding: 0.5rem 1rem; background: #eee; color: #333; border-radius: 4px; border: 1px solid #ccc;">Read the Original Text</a>
     </div>
     
     <div style="display: flex; gap: 2rem; margin: 2rem 0;">
