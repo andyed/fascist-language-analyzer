@@ -85,6 +85,41 @@ def build_local_source_url(quote_text: str, source_pages_per_html: int) -> str:
     return f"../source/{filename}{fragment}"
 
 
+# Canonical Eco property names (numbered).  The LLM sometimes emits these
+# with or without the number prefix, or with a trailing "(13)"-style suffix.
+# We normalise every trait to the numbered form so the graph has exactly 14
+# theme nodes.
+CANONICAL_TRAITS = {
+    "Cult of Tradition":                      "1. Cult of Tradition",
+    "Rejection of Modernism":                 "2. Rejection of Modernism",
+    "Action for Action's Sake":               "3. Action for Action's Sake",
+    "Disagreement is Treason":                "4. Disagreement is Treason",
+    "Fear of Difference":                     "5. Fear of Difference",
+    "Appeal to Social Frustration":           "6. Appeal to Social Frustration",
+    "Obsession with a Plot":                  "7. Obsession with a Plot",
+    "Enemy is Both Strong and Weak":          "8. Enemy is Both Strong and Weak",
+    "Pacifism is Trafficking with the Enemy": "9. Pacifism is Trafficking with the Enemy",
+    "Contempt for the Weak":                  "10. Contempt for the Weak",
+    "Everybody is Educated to Become a Hero": "11. Everybody is Educated to Become a Hero",
+    "Machismo and Weaponry":                  "12. Machismo and Weaponry",
+    "Selective Populism":                     "13. Selective Populism",
+    "Ur-Fascism Speaks Newspeak":             "14. Ur-Fascism Speaks Newspeak",
+}
+
+
+def normalize_trait(raw: str) -> str:
+    """Map any LLM trait variant to the canonical numbered form."""
+    raw = canonical_space(raw)
+    # Already canonical numbered form?
+    if raw in CANONICAL_TRAITS.values():
+        return raw
+    # Strip leading number + dot  ("7. Obsession..." → "Obsession...")
+    stripped = re.sub(r"^\d+\.\s*", "", raw)
+    # Strip trailing parenthetical number  ("Selective Populism (13)" → "Selective Populism")
+    stripped = re.sub(r"\s*\(\d+\)\s*$", "", stripped)
+    return CANONICAL_TRAITS.get(stripped, raw)
+
+
 def normalize_phrase(text: str) -> str:
     return canonical_space(text).lower()
 
@@ -162,7 +197,7 @@ def main() -> None:
 
     for chunk in analysis:
         for concept in chunk.get("concepts", []):
-            theme = concept.get("trait")
+            theme = normalize_trait(concept.get("trait", ""))
             quote = canonical_space(concept.get("quote", ""))
             explanation = canonical_space(concept.get("explanation", ""))
             confidence = float(concept.get("confidence", 0.5) or 0.5)

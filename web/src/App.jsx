@@ -2,24 +2,12 @@
 import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Link, useParams } from 'react-router-dom';
 import ForceGraph2D from 'react-force-graph-2d';
-
-// --- Shared Data/Configs ---
-const TRAIT_COLORS = {
-  "Cult of Tradition": "#ffcccc",
-  "Rejection of Modernism": "#ffe5cc",
-  "Action for Action's Sake": "#ffffcc",
-  "Disagreement is Treason": "#e5ffcc",
-  "Fear of Difference": "#ccffcc",
-  "Appeal to Social Frustration": "#ccffe5",
-  "Obsession with a Plot": "#ccffff",
-  "Enemy is Strong and Weak": "#cce5ff",
-  "Pacifism is Trafficking with the Enemy": "#ccccff",
-  "Contempt for the Weak": "#e5ccff",
-  "Everybody is Educated to Become a Hero": "#ffccff",
-  "Machismo and Weaponry": "#ffcce5",
-  "Selective Populism": "#e0e0e0",
-  "Ur-Fascism Speaks Newspeak": "#ff9999"
-};
+import { TRAIT_COLORS, hexToRgb, interpolateColor } from './utils/graphHelpers';
+import EntityThemeGraph from './components/EntityThemeGraph';
+import EntityClassFilter from './components/EntityClassFilter';
+import EvidencePanel from './components/EvidencePanel';
+import ThemeEgoGraph from './components/ThemeEgoGraph';
+import ChunkPreview from './components/ChunkPreview';
 
 // --- Components ---
 
@@ -29,7 +17,9 @@ const Nav = () => (
     <Link to="/themes" style={{ color: 'white' }}>Analysis by Theme</Link>
     <Link to="/entities" style={{ color: 'white' }}>Entities</Link>
     <Link to="/entity-themes" style={{ color: 'white' }}>Entity × Themes</Link>
-    <a href="../entities/index.html" style={{ color: 'white' }}>Static Entity Index</a>
+    {location.hostname !== 'localhost' && (
+      <a href="../entities/index.html" style={{ color: 'white' }}>Static Entity Index</a>
+    )}
   </nav>
 );
 
@@ -109,37 +99,19 @@ const Sparkline = ({ counts, color }) => {
 };
 
 
-// --- Helper for Color Gradient ---
-// Simple linear interpolation between two colors
-const interpolateColor = (color1, color2, factor = 0.5) => {
-  const result = color1.slice();
-  for (let i = 0; i < 3; i++) {
-    result[i] = Math.round(result[i] + factor * (color2[i] - color1[i]));
-  }
-  return `rgb(${result[0]}, ${result[1]}, ${result[2]})`;
-};
-
-const hexToRgb = (hex) => {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  return result ? [
-    parseInt(result[1], 16),
-    parseInt(result[2], 16),
-    parseInt(result[3], 16)
-  ] : null;
-}
-
 const START_COLOR = hexToRgb("#e0f7fa"); // Light Cyan (Start)
 const END_COLOR = hexToRgb("#ff5252");   // Red Accent (End)
 
 const GraphView = () => {
   const [graphData, setGraphData] = useState({ nodes: [], links: [] });
   const [maxChunkId, setMaxChunkId] = useState(1);
+  const [selectedChunk, setSelectedChunk] = useState(null);
+  const [chunkPages, setChunkPages] = useState(null);
 
   useEffect(() => {
     fetch('./graph_data.json')
       .then(res => res.json())
       .then(data => {
-        // Find max chunk ID for normalization
         let maxId = 0;
         data.nodes.forEach(n => {
           if (n.group === 'chunk') {
@@ -152,7 +124,6 @@ const GraphView = () => {
         });
         setMaxChunkId(maxId);
 
-        // Filter out unconnected nodes (e.g. traits with 0 occurrences)
         const connectedNodeIds = new Set();
         data.links.forEach(l => {
           connectedNodeIds.add(l.source);
@@ -165,7 +136,33 @@ const GraphView = () => {
 
         setGraphData({ nodes: activeNodes, links: activeLinks });
       });
+    loadChunkPages().then(setChunkPages);
   }, []);
+
+  // Derive connected traits for the selected chunk
+  const chunkPreviewData = (() => {
+    if (!selectedChunk) return null;
+    const chunkIdNum = selectedChunk.id.split(' ')[1];
+    const page = chunkPages?.[chunkIdNum] || null;
+    // Find trait connections from graph links (excluding structural)
+    const connectedTraits = graphData.links
+      .filter(l => l.type !== 'structural')
+      .filter(l => {
+        const sid = typeof l.source === 'object' ? l.source.id : l.source;
+        const tid = typeof l.target === 'object' ? l.target.id : l.target;
+        return sid === selectedChunk.id || tid === selectedChunk.id;
+      })
+      .map(l => {
+        const sid = typeof l.source === 'object' ? l.source.id : l.source;
+        const tid = typeof l.target === 'object' ? l.target.id : l.target;
+        const traitName = sid === selectedChunk.id ? tid : sid;
+        return { name: traitName, confidence: l.value };
+      })
+      .sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+
+    const sourceUrl = buildLocalSourceUrlForPage(page, selectedChunk.desc || '');
+    return { page, connectedTraits, sourceUrl };
+  })();
 
   return (
     <div style={{ height: 'calc(100vh - 60px)', position: 'relative' }}>
@@ -178,39 +175,35 @@ const GraphView = () => {
           <span>Doc End</span>
         </div>
       </div>
+
+      {selectedChunk && chunkPreviewData && (
+        <ChunkPreview
+          chunk={selectedChunk}
+          page={chunkPreviewData.page}
+          connectedTraits={chunkPreviewData.connectedTraits}
+          sourceUrl={chunkPreviewData.sourceUrl}
+          onClose={() => setSelectedChunk(null)}
+        />
+      )}
+
       <ForceGraph2D
         graphData={graphData}
-        // Use structural links for physics, but make them invisible/faint
         linkColor={link => link.type === 'structural' ? 'rgba(0,0,0,0)' : '#eee'}
         linkWidth={link => link.type === 'structural' ? 0 : 1}
-
-        // Physics Tuning for reduced overlap
-        d3AlphaDecay={0.02} // Slower decay = more time to settle
-        d3VelocityDecay={0.3} // Less friction
+        d3AlphaDecay={0.02}
+        d3VelocityDecay={0.3}
         cooldownTicks={100}
-        onEngineStop={() => console.log('Engine stopped')}
-
-        // Custom Forces
-        d3Force={(d3Graph, force) => {
-          // Increase repulsion significantly
+        d3Force={(d3Graph) => {
           d3Graph.force('charge').strength(-120);
           d3Graph.force('link').distance(link => link.type === 'structural' ? 50 : 100);
-
-          // Add collision to prevent overlap
-          // We need to import d3 for this or rely on exposed props? 
-          // force-graph exposes d3Force to modify existing forces, 
-          // or we can add new ones if we had access to d3.
-          // Since we don't have d3 imported here easily, rely on standard props
         }}
-
         backgroundColor="#ffffff"
         nodeCanvasObject={(node, ctx, globalScale) => {
           const label = node.id;
           const isTrait = node.group === 'trait';
-          const fontSize = (isTrait ? 14 : 4) / globalScale; // Traits larger
+          const fontSize = (isTrait ? 14 : 4) / globalScale;
           ctx.font = `${isTrait ? 'bold' : ''} ${fontSize}px Sans-Serif`;
 
-          // Determine Node Color
           let nodeColor = node.color || '#ccc';
           if (!isTrait) {
             const idParams = node.id.split(' ');
@@ -222,19 +215,12 @@ const GraphView = () => {
           }
 
           if (!isTrait) {
-            // Chunk Nodes: Less intrusive, no text label by default
-            // Just a small colored square/circle
             const size = 6;
             ctx.fillStyle = nodeColor;
             ctx.globalAlpha = 0.8;
             ctx.fillRect(node.x - size / 2, node.y - size / 2, size, size);
             ctx.globalAlpha = 1.0;
-
-            // Only draw label on hover? 
-            // nodeCanvasObject doesn't easily know hover state without state management.
-            // For now, OMIT label as requested to reduce jam.
           } else {
-            // Trait Nodes: Draw Box + Text
             const labelWithCount = `${label} (${node.val})`;
             const textWidth = ctx.measureText(labelWithCount).width;
             const bckgDimensions = [textWidth, fontSize].map(n => n + fontSize * 0.4);
@@ -248,7 +234,6 @@ const GraphView = () => {
             ctx.fillText(labelWithCount, node.x, node.y);
           }
 
-          // Re-use dim for pointer area (make sure chunks have a hit area)
           node.__bckgDimensions = isTrait ?
             [ctx.measureText(`${label} (${node.val})`).width + fontSize * 0.4, fontSize * 1.4] :
             [8, 8];
@@ -261,10 +246,11 @@ const GraphView = () => {
         onNodeClick={node => {
           if (node.group === 'trait') {
             window.location.hash = `#/theme/${encodeURIComponent(node.id)}`;
-          } else if (node.desc) {
-            alert(`${node.id}: ${node.desc}`);
+          } else {
+            setSelectedChunk(node);
           }
         }}
+        onBackgroundClick={() => setSelectedChunk(null)}
       />
     </div>
   );
@@ -484,10 +470,12 @@ const ThemePage = () => {
   return (
     <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
       <Link to="/themes" style={{ display: 'inline-block', marginBottom: '1rem', color: '#666', textDecoration: 'none' }}>← Back to Themes</Link>
-      <div style={{ borderBottom: `4px solid ${color}`, marginBottom: '2rem' }}>
+      <div style={{ borderBottom: `4px solid ${color}`, marginBottom: '1.5rem' }}>
         <h1>{decodedTrait}</h1>
         <p>{quotes.length} instances found</p>
       </div>
+
+      <ThemeEgoGraph themeId={decodedTrait} />
 
       {quotes.map((q, i) => (
         <div key={i} style={{ background: '#f9f9f9', padding: '1rem', borderRadius: '8px', marginBottom: '1rem', borderLeft: `4px solid ${color}` }}>
@@ -507,7 +495,7 @@ const EntitiesList = () => {
   const [entityData, setEntityData] = useState({ entity_classes: [], classes: {} });
 
   useEffect(() => {
-    fetch('./entity_theme_data.json')
+    fetch('./entities_data.json')
       .then(res => res.json())
       .then(setEntityData)
       .catch(() => setEntityData({ entity_classes: [], classes: {} }));
@@ -650,16 +638,27 @@ const EntityThemeView = () => {
   const [data, setData] = useState(null);
   const [selected, setSelected] = useState(null);
   const [chunkPages, setChunkPages] = useState(null);
-  const [minWeight, setMinWeight] = useState(2.5);
-  const [maxLinks, setMaxLinks] = useState(140);
-  const [hoveredNodeId, setHoveredNodeId] = useState(null);
+  const [minWeight, setMinWeight] = useState(1.0);
+  const [maxLinks, setMaxLinks] = useState(320);
+  const [visibleClasses, setVisibleClasses] = useState(null); // initialized after data loads
 
   useEffect(() => {
     fetch('./entity_theme_data.json')
       .then(res => res.json())
       .then(setData)
       .catch(() => setData(undefined));
+    loadChunkPages().then(setChunkPages);
   }, []);
+
+  // Initialize visibleClasses once data arrives
+  useEffect(() => {
+    if (data?.graph?.nodes && !visibleClasses) {
+      const classes = new Set(
+        data.graph.nodes.filter(n => n.group === 'entity').map(n => n.entity_class).filter(Boolean)
+      );
+      setVisibleClasses(classes);
+    }
+  }, [data]);
 
   if (data === null) {
     return <div style={{ padding: '2rem' }}>Loading entity-theme relationships...</div>;
@@ -669,7 +668,7 @@ const EntityThemeView = () => {
     return (
       <div style={{ padding: '2rem', maxWidth: '900px', margin: '0 auto' }}>
         <h1>Entity × Theme Relationships</h1>
-        <p>Relationship data not found. Generate `web/public/entity_theme_data.json` first.</p>
+        <p>Relationship data not found. Generate <code>web/public/entity_theme_data.json</code> first.</p>
       </div>
     );
   }
@@ -694,16 +693,54 @@ const EntityThemeView = () => {
   const filteredNodes = allNodes.filter(node => activeNodeIds.has(node.id));
   const filteredTopEdges = (data.top_edges || [])
     .filter(edge => edge.weight >= minWeight)
-    .slice(0, 80);
+    .slice(0, 120);
+
+  // Count entity nodes per class (from filtered set)
+  const classCounts = {};
+  filteredNodes.forEach(n => {
+    if (n.group === 'entity' && n.entity_class) {
+      classCounts[n.entity_class] = (classCounts[n.entity_class] || 0) + 1;
+    }
+  });
+
+  const handleClassToggle = (cls) => {
+    setVisibleClasses(prev => {
+      const next = new Set(prev);
+      if (next.has(cls)) next.delete(cls);
+      else next.add(cls);
+      return next;
+    });
+  };
+
+  const handleNodeClick = (node) => {
+    if (node.group === 'entity') {
+      window.location.hash = `#/entity/${encodeURIComponent(node.id)}`;
+    } else {
+      setSelected({ type: 'theme', value: node.id });
+    }
+  };
+
+  const handleLinkClick = (link) => {
+    const sourceId = idOf(link.source);
+    const targetId = idOf(link.target);
+    // Match in either direction (entity→theme or theme→entity)
+    const match = filteredTopEdges.find(
+      e => (e.entity_id === sourceId && e.theme === targetId) ||
+           (e.entity_id === targetId && e.theme === sourceId)
+    );
+    if (match) {
+      setSelected({ type: 'edge', value: match });
+    }
+  };
 
   return (
     <div style={{ padding: '1.5rem', maxWidth: '1200px', margin: '0 auto' }}>
       <h1 style={{ marginBottom: '0.4rem' }}>Entity × Theme Relationships</h1>
       <p style={{ color: '#666', marginTop: 0 }}>
-        Co-mention graph from analysis quote/explanation text. Themes are labeled, entities are dots (hover to inspect). Score mode: {scoreMode}.
+        Co-mention graph. Themes always labeled; entity labels appear on hover or zoom. Score mode: {scoreMode}.
       </p>
 
-      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.6rem', alignItems: 'center' }}>
         <label style={{ fontSize: '0.9rem' }}>
           Min edge weight: <strong>{minWeight.toFixed(1)}</strong>{' '}
           <input
@@ -720,10 +757,10 @@ const EntityThemeView = () => {
           Max links:{' '}
           <select value={maxLinks} onChange={e => setMaxLinks(parseInt(e.target.value, 10))}>
             <option value={80}>80</option>
-            <option value={120}>120</option>
             <option value={140}>140</option>
-            <option value={180}>180</option>
             <option value={240}>240</option>
+            <option value={320}>320</option>
+            <option value={500}>500</option>
           </select>
         </label>
         <span style={{ color: '#666', fontSize: '0.9rem' }}>
@@ -731,129 +768,35 @@ const EntityThemeView = () => {
         </span>
       </div>
 
+      {visibleClasses && (
+        <div style={{ marginBottom: '0.8rem' }}>
+          <EntityClassFilter
+            classCounts={classCounts}
+            visibleClasses={visibleClasses}
+            onToggle={handleClassToggle}
+          />
+        </div>
+      )}
+
       <div style={{ height: '55vh', border: '1px solid #e5e5e5', borderRadius: '8px', marginBottom: '1rem' }}>
-        <ForceGraph2D
-          graphData={{ nodes: filteredNodes, links: filteredLinks }}
-          d3AlphaDecay={0.03}
-          d3VelocityDecay={0.4}
-          cooldownTicks={120}
-          linkWidth={link => Math.max(0.8, Math.min(5, (link.value || 1) / 2))}
-          linkColor={() => 'rgba(120,120,120,0.35)'}
-          nodeLabel={node => {
-            if (node.group === 'theme') {
-              return `${node.label} (theme)`;
-            }
-            return `${node.label} (${node.entity_class})`;
-          }}
-          nodeCanvasObject={(node, ctx, globalScale) => {
-            const label = node.label || node.id;
-            const isTheme = node.group === 'theme';
-            const isHovered = hoveredNodeId === node.id;
-
-            if (isTheme) {
-              const fontSize = 12 / globalScale;
-              ctx.font = `bold ${fontSize}px Sans-Serif`;
-              const textWidth = ctx.measureText(label).width;
-              const padding = 4 / globalScale;
-              const boxW = textWidth + padding * 2;
-              const boxH = fontSize + padding * 2;
-
-              ctx.fillStyle = '#ffe0e0';
-              ctx.fillRect(node.x - boxW / 2, node.y - boxH / 2, boxW, boxH);
-
-              ctx.textAlign = 'center';
-              ctx.textBaseline = 'middle';
-              ctx.fillStyle = '#222';
-              ctx.fillText(label, node.x, node.y);
-
-              node.__bckgDimensions = [boxW, boxH];
-              return;
-            }
-
-            const radius = Math.max(1.8, Math.min(6, ((node.count || 1) / 40) + 2));
-            ctx.beginPath();
-            ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI, false);
-            ctx.fillStyle = '#6da6e8';
-            ctx.fill();
-
-            if (isHovered) {
-              const fontSize = 10 / globalScale;
-              ctx.font = `${fontSize}px Sans-Serif`;
-              const textWidth = ctx.measureText(label).width;
-              const pad = 3 / globalScale;
-              const lx = node.x + radius + 4 / globalScale;
-              const ly = node.y - radius - 2 / globalScale;
-
-              ctx.fillStyle = 'rgba(255,255,255,0.92)';
-              ctx.fillRect(lx - pad, ly - fontSize, textWidth + pad * 2, fontSize + pad * 2);
-              ctx.fillStyle = '#111';
-              ctx.textAlign = 'left';
-              ctx.textBaseline = 'alphabetic';
-              ctx.fillText(label, lx, ly);
-            }
-
-            node.__radius = radius;
-          }}
-          nodePointerAreaPaint={(node, color, ctx) => {
-            ctx.fillStyle = color;
-            if (node.group === 'theme') {
-              const d = node.__bckgDimensions;
-              if (d) {
-                ctx.fillRect(node.x - d[0] / 2, node.y - d[1] / 2, d[0], d[1]);
-              }
-            } else {
-              const r = node.__radius || 3;
-              ctx.beginPath();
-              ctx.arc(node.x, node.y, r + 2, 0, 2 * Math.PI, false);
-              ctx.fill();
-            }
-          }}
-          onNodeHover={node => setHoveredNodeId(node?.id || null)}
-          onNodeClick={node => {
-            if (node.group === 'entity') {
-              window.location.hash = `#/entity/${encodeURIComponent(node.id)}`;
-              return;
-            }
-            setSelected({ type: 'theme', value: node.id });
-          }}
-          onLinkClick={link => {
-            const sourceId = idOf(link.source);
-            const targetId = idOf(link.target);
-            const match = filteredTopEdges.find(
-              e => e.entity_id === sourceId && e.theme === targetId
-            );
-            if (match) {
-              setSelected({ type: 'edge', value: match });
-            }
-          }}
-        />
+        {visibleClasses && (
+          <EntityThemeGraph
+            nodes={filteredNodes}
+            links={filteredLinks}
+            visibleClasses={visibleClasses}
+            onNodeClick={handleNodeClick}
+            onLinkClick={handleLinkClick}
+          />
+        )}
       </div>
 
       {selected?.type === 'edge' && (
-        <div style={{ background: '#fafafa', border: '1px solid #eee', borderRadius: '8px', padding: '1rem', marginBottom: '1rem' }}>
-          <h3 style={{ marginTop: 0 }}>{selected.value.entity_label} ↔ {selected.value.theme}</h3>
-          <p style={{ marginTop: 0, color: '#666' }}>
-            Score ({selected.value.score_mode || scoreMode}): {selected.value.weight} · Raw weight: {selected.value.raw_weight ?? selected.value.weight} · Lift: {selected.value.lift ?? 'n/a'} · PMI: {selected.value.pmi ?? 'n/a'} · Matches: {selected.value.count}
-          </p>
-          {(selected.value.evidence || []).map((ev, i) => {
-            const quote = typeof ev === 'string' ? ev : ev.quote;
-            const chunkId = typeof ev === 'string' ? null : ev.chunk_id;
-            const sourceUrl = typeof ev === 'string' ? null : ev.source_url;
-            const localEvidenceSource = buildLocalSourceUrlForPage(
-              chunkId !== null && chunkId !== undefined ? chunkPages?.[String(chunkId)] : null,
-              quote
-            );
-            return (
-              <blockquote key={i} style={{ margin: '0.5rem 0', paddingLeft: '0.8rem', borderLeft: '3px solid #ddd' }}>
-                <div>{quote}</div>
-                <div style={{ color: '#666', fontSize: '0.85rem', marginTop: '0.3rem' }}>
-                  {chunkId !== null && chunkId !== undefined ? <>Chunk {chunkId}</> : <>Chunk n/a</>}
-                  <> · <a href={localEvidenceSource} target="_blank" rel="noreferrer">Source doc</a></>
-                </div>
-              </blockquote>
-            );
-          })}
-        </div>
+        <EvidencePanel
+          edge={selected.value}
+          scoreMode={scoreMode}
+          chunkPages={chunkPages}
+          buildLocalSourceUrlForPage={buildLocalSourceUrlForPage}
+        />
       )}
 
       <h2 style={{ marginBottom: '0.6rem' }}>Top Entity-Theme Links</h2>
@@ -875,7 +818,7 @@ const EntityThemeView = () => {
                   const chunkId = typeof ev === 'string' ? null : ev.chunk_id;
                   return (
                     <>
-                      “{quote}”
+                      "{quote}"
                       {chunkId !== null && chunkId !== undefined && (
                         <span style={{ color: '#666' }}> (chunk {chunkId})</span>
                       )}
